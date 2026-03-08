@@ -17,6 +17,7 @@ const TABS = [
   { id: 'groups', label: 'קבוצות', icon: FolderKanban },
   { id: 'billing', label: 'גבייה (בנק)', icon: CreditCard },
   { id: 'debts', label: 'חובות (מזומן)', icon: Banknote },
+  { id: 'activity', label: 'פעולות', icon: History },
   { id: 'settings', label: 'הגדרות', icon: Settings },
 ];
 
