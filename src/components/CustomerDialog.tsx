@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,55 +19,92 @@ interface Props {
 }
 
 export default function CustomerDialog({ open, onOpenChange, customer, groups, onSaved }: Props) {
-  const [form, setForm] = useState<Record<string, any>>({});
-  const initializedRef = useRef(false);
-  const lastCustomerIdRef = useRef<number | null | undefined>(undefined);
-
-  // Initialize form only when dialog opens or customer changes - no useEffect to avoid loops
-  if (open && (!initializedRef.current || lastCustomerIdRef.current !== customer?.id)) {
-    initializedRef.current = true;
-    lastCustomerIdRef.current = customer?.id ?? null;
-    if (customer) {
-      // Use setTimeout to avoid setState during render
-      setTimeout(() => setForm({ ...customer }), 0);
-    } else {
-      setTimeout(() => setForm({ ...EMPTY_CUSTOMER, startDate: new Date().toISOString().split('T')[0] }), 0);
-    }
-  }
-  if (!open && initializedRef.current) {
-    initializedRef.current = false;
-  }
+  const [fullName, setFullName] = useState('');
+  const [idNumber, setIdNumber] = useState('');
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [address, setAddress] = useState('');
+  const [notes, setNotes] = useState('');
+  const [bankNumber, setBankNumber] = useState('');
+  const [branchNumber, setBranchNumber] = useState('');
+  const [accountNumber, setAccountNumber] = useState('');
+  const [accountHolderName, setAccountHolderName] = useState('');
+  const [authorizationRef, setAuthorizationRef] = useState('');
+  const [authorizationDate, setAuthorizationDate] = useState('');
+  const [monthlyAmount, setMonthlyAmount] = useState(0);
+  const [billingCycle, setBillingCycle] = useState<'monthly' | 'custom'>('monthly');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [status, setStatus] = useState<'active' | 'paused' | 'cancelled'>('active');
+  const [groupId, setGroupId] = useState<number | null>(null);
 
   const isEdit = !!customer;
-  const set = (field: string, value: any) => setForm(prev => ({ ...prev, [field]: value }));
 
-  const handleSave = async () => {
-    if (!form.fullName?.trim()) { toast.error('שם הלקוח חובה'); return; }
+  // Only reset form when dialog opens
+  useEffect(() => {
+    if (!open) return;
+    if (customer) {
+      setFullName(customer.fullName);
+      setIdNumber(customer.idNumber);
+      setPhone(customer.phone);
+      setEmail(customer.email);
+      setAddress(customer.address);
+      setNotes(customer.notes);
+      setBankNumber(customer.bankNumber);
+      setBranchNumber(customer.branchNumber);
+      setAccountNumber(customer.accountNumber);
+      setAccountHolderName(customer.accountHolderName);
+      setAuthorizationRef(customer.authorizationRef);
+      setAuthorizationDate(customer.authorizationDate);
+      setMonthlyAmount(customer.monthlyAmount);
+      setBillingCycle(customer.billingCycle);
+      setStartDate(customer.startDate);
+      setEndDate(customer.endDate);
+      setStatus(customer.status);
+      setGroupId(customer.groupId);
+    } else {
+      setFullName('');
+      setIdNumber('');
+      setPhone('');
+      setEmail('');
+      setAddress('');
+      setNotes('');
+      setBankNumber('');
+      setBranchNumber('');
+      setAccountNumber('');
+      setAccountHolderName('');
+      setAuthorizationRef('');
+      setAuthorizationDate('');
+      setMonthlyAmount(0);
+      setBillingCycle('monthly');
+      setStartDate(new Date().toISOString().split('T')[0]);
+      setEndDate('');
+      setStatus('active');
+      setGroupId(null);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  const handleSave = useCallback(async () => {
+    if (!fullName.trim()) { toast.error('שם הלקוח חובה'); return; }
     const now = new Date().toISOString();
+    const data = {
+      fullName, idNumber, phone, email, address, notes,
+      bankNumber, branchNumber, accountNumber, accountHolderName,
+      authorizationRef, authorizationDate, monthlyAmount,
+      billingCycle, startDate, endDate,
+      chargeFrequencyMonths: 1, status, groupId, tags: [] as string[],
+    };
     if (isEdit && customer) {
-      await updateCustomer({ ...customer, ...form, updatedAt: now } as Customer);
+      await updateCustomer({ ...customer, ...data, updatedAt: now });
       toast.success('הלקוח עודכן');
     } else {
-      await addCustomer({ ...form, createdAt: now, updatedAt: now, tags: form.tags || [] } as any);
+      await addCustomer({ ...data, createdAt: now, updatedAt: now });
       toast.success('לקוח נוסף');
     }
     onOpenChange(false);
     onSaved();
-  };
-
-  const Field = ({ label, field, type = 'text', dir, placeholder }: { label: string; field: string; type?: string; dir?: string; placeholder?: string }) => (
-    <div className="space-y-1.5">
-      <Label className="text-xs text-muted-foreground">{label}</Label>
-      <Input
-        type={type}
-        value={form[field] ?? ''}
-        onChange={e => set(field, type === 'number' ? Number(e.target.value) : e.target.value)}
-        dir={dir}
-        placeholder={placeholder}
-        className="h-9"
-      />
-    </div>
-  );
+  }, [fullName, idNumber, phone, email, address, notes, bankNumber, branchNumber, accountNumber, accountHolderName, authorizationRef, authorizationDate, monthlyAmount, billingCycle, startDate, endDate, status, groupId, isEdit, customer, onOpenChange, onSaved]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -82,12 +119,25 @@ export default function CustomerDialog({ open, onOpenChange, customer, groups, o
           <div>
             <h3 className="text-sm font-semibold mb-3 text-primary">פרטים אישיים</h3>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="שם מלא *" field="fullName" placeholder="ישראל ישראלי" />
-              <Field label="תעודת זהות" field="idNumber" dir="ltr" placeholder="000000000" />
-              <Field label="טלפון" field="phone" type="tel" dir="ltr" placeholder="050-0000000" />
-              <Field label="אימייל" field="email" type="email" dir="ltr" />
-              <div className="col-span-2">
-                <Field label="כתובת" field="address" />
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">שם מלא *</Label>
+                <Input value={fullName} onChange={e => setFullName(e.target.value)} placeholder="ישראל ישראלי" className="h-9" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">תעודת זהות</Label>
+                <Input value={idNumber} onChange={e => setIdNumber(e.target.value)} dir="ltr" placeholder="000000000" className="h-9" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">טלפון</Label>
+                <Input value={phone} onChange={e => setPhone(e.target.value)} type="tel" dir="ltr" placeholder="050-0000000" className="h-9" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">אימייל</Label>
+                <Input value={email} onChange={e => setEmail(e.target.value)} type="email" dir="ltr" className="h-9" />
+              </div>
+              <div className="col-span-2 space-y-1.5">
+                <Label className="text-xs text-muted-foreground">כתובת</Label>
+                <Input value={address} onChange={e => setAddress(e.target.value)} className="h-9" />
               </div>
             </div>
           </div>
@@ -96,14 +146,32 @@ export default function CustomerDialog({ open, onOpenChange, customer, groups, o
           <div>
             <h3 className="text-sm font-semibold mb-3 text-primary">פרטי חשבון בנק</h3>
             <div className="grid grid-cols-3 gap-3">
-              <Field label="מספר בנק" field="bankNumber" dir="ltr" placeholder="12" />
-              <Field label="מספר סניף" field="branchNumber" dir="ltr" placeholder="345" />
-              <Field label="מספר חשבון" field="accountNumber" dir="ltr" placeholder="123456789" />
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">מספר בנק</Label>
+                <Input value={bankNumber} onChange={e => setBankNumber(e.target.value)} dir="ltr" placeholder="12" className="h-9" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">מספר סניף</Label>
+                <Input value={branchNumber} onChange={e => setBranchNumber(e.target.value)} dir="ltr" placeholder="345" className="h-9" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">מספר חשבון</Label>
+                <Input value={accountNumber} onChange={e => setAccountNumber(e.target.value)} dir="ltr" placeholder="123456789" className="h-9" />
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-3 mt-3">
-              <Field label="שם בעל החשבון" field="accountHolderName" />
-              <Field label="מספר אסמכתא הרשאה" field="authorizationRef" dir="ltr" />
-              <Field label="תאריך הרשאה" field="authorizationDate" type="date" dir="ltr" />
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">שם בעל החשבון</Label>
+                <Input value={accountHolderName} onChange={e => setAccountHolderName(e.target.value)} className="h-9" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">מספר אסמכתא הרשאה</Label>
+                <Input value={authorizationRef} onChange={e => setAuthorizationRef(e.target.value)} dir="ltr" className="h-9" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">תאריך הרשאה</Label>
+                <Input value={authorizationDate} onChange={e => setAuthorizationDate(e.target.value)} type="date" dir="ltr" className="h-9" />
+              </div>
             </div>
           </div>
 
@@ -111,10 +179,13 @@ export default function CustomerDialog({ open, onOpenChange, customer, groups, o
           <div>
             <h3 className="text-sm font-semibold mb-3 text-primary">הגדרות חיוב</h3>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="סכום חודשי (₪)" field="monthlyAmount" type="number" dir="ltr" />
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">סכום חודשי (₪)</Label>
+                <Input value={monthlyAmount || ''} onChange={e => setMonthlyAmount(Number(e.target.value) || 0)} type="number" dir="ltr" className="h-9" />
+              </div>
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">מחזור חיוב</Label>
-                <Select value={form.billingCycle || 'monthly'} onValueChange={v => set('billingCycle', v)}>
+                <Select value={billingCycle} onValueChange={v => setBillingCycle(v as 'monthly' | 'custom')}>
                   <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="monthly">חודשי</SelectItem>
@@ -122,11 +193,17 @@ export default function CustomerDialog({ open, onOpenChange, customer, groups, o
                   </SelectContent>
                 </Select>
               </div>
-              <Field label="תאריך התחלה" field="startDate" type="date" dir="ltr" />
-              <Field label="תאריך סיום (אופציונלי)" field="endDate" type="date" dir="ltr" />
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">תאריך התחלה</Label>
+                <Input value={startDate} onChange={e => setStartDate(e.target.value)} type="date" dir="ltr" className="h-9" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">תאריך סיום (אופציונלי)</Label>
+                <Input value={endDate} onChange={e => setEndDate(e.target.value)} type="date" dir="ltr" className="h-9" />
+              </div>
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">סטטוס</Label>
-                <Select value={form.status || 'active'} onValueChange={v => set('status', v)}>
+                <Select value={status} onValueChange={v => setStatus(v as 'active' | 'paused' | 'cancelled')}>
                   <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="active">פעיל</SelectItem>
@@ -137,7 +214,7 @@ export default function CustomerDialog({ open, onOpenChange, customer, groups, o
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">קבוצה</Label>
-                <Select value={form.groupId ? String(form.groupId) : 'none'} onValueChange={v => set('groupId', v === 'none' ? null : Number(v))}>
+                <Select value={groupId ? String(groupId) : 'none'} onValueChange={v => setGroupId(v === 'none' ? null : Number(v))}>
                   <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">ללא קבוצה</SelectItem>
@@ -151,7 +228,7 @@ export default function CustomerDialog({ open, onOpenChange, customer, groups, o
           {/* Notes */}
           <div className="space-y-1.5">
             <Label className="text-xs text-muted-foreground">הערות</Label>
-            <Textarea value={form.notes || ''} onChange={e => set('notes', e.target.value)} rows={2} />
+            <Textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} />
           </div>
 
           {/* Actions */}
