@@ -757,8 +757,13 @@ export default function DebtsView() {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>סכום (₪)</Label>
-              <Input type="number" dir="ltr" value={extraChargeAmount || ''} onChange={e => setExtraChargeAmount(Number(e.target.value) || 0)} placeholder="למשל 200" />
+              <Label>כמות אמפרים נוספים</Label>
+              <Input type="number" dir="ltr" value={extraChargeAmperes || ''} onChange={e => setExtraChargeAmperes(Number(e.target.value) || 0)} placeholder="למשל 5" />
+              {extraChargeAmperes > 0 && (settings?.pricePerAmpere || 0) > 0 && (
+                <p className="text-sm text-muted-foreground">
+                  סכום: ₪{(extraChargeAmperes * (settings?.pricePerAmpere || 0)).toLocaleString()} ({extraChargeAmperes} × ₪{settings?.pricePerAmpere})
+                </p>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label>הערה</Label>
@@ -767,9 +772,9 @@ export default function DebtsView() {
           </div>
           <div className="flex justify-end gap-3">
             <Button variant="secondary" onClick={() => setExtraChargeDialog(false)}>ביטול</Button>
-            <Button onClick={handleExtraCharge} disabled={!extraChargeCustomerId || extraChargeAmount <= 0}>
+            <Button onClick={handleExtraCharge} disabled={!extraChargeCustomerId || extraChargeAmperes <= 0}>
               <PlusCircle className="h-4 w-4 ml-1" />
-              צור חיוב
+              הוסף אמפרים
             </Button>
           </div>
         </DialogContent>
