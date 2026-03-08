@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { LayoutDashboard, Users, FolderKanban, CreditCard, Settings, Banknote, History } from 'lucide-react';
+import { LayoutDashboard, Users, FolderKanban, CreditCard, Settings, Banknote, History, BarChart3, Zap } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import DashboardView from '@/components/DashboardView';
 import CustomersView from '@/components/CustomersView';
@@ -8,6 +8,8 @@ import BillingView from '@/components/BillingView';
 import DebtsView from '@/components/DebtsView';
 import SettingsView from '@/components/SettingsView';
 import ActivityLogView from '@/components/ActivityLogView';
+import ReportsView from '@/components/ReportsView';
+import BulkChargeView from '@/components/BulkChargeView';
 import CommandPalette from '@/components/CommandPalette';
 import ThemeToggle from '@/components/ThemeToggle';
 
@@ -16,7 +18,9 @@ const TABS = [
   { id: 'customers', label: 'לקוחות', icon: Users },
   { id: 'groups', label: 'קבוצות', icon: FolderKanban },
   { id: 'billing', label: 'גבייה (בנק)', icon: CreditCard },
+  { id: 'bulk-charge', label: 'חיוב גורף', icon: Zap },
   { id: 'debts', label: 'חובות (מזומן)', icon: Banknote },
+  { id: 'reports', label: 'דוחות', icon: BarChart3 },
   { id: 'activity', label: 'פעולות', icon: History },
   { id: 'settings', label: 'הגדרות', icon: Settings },
 ];
@@ -71,7 +75,9 @@ const Index = () => {
           <TabsContent value="customers"><CustomersView /></TabsContent>
           <TabsContent value="groups"><GroupsView /></TabsContent>
           <TabsContent value="billing"><BillingView /></TabsContent>
+          <TabsContent value="bulk-charge"><BulkChargeView /></TabsContent>
           <TabsContent value="debts"><DebtsView /></TabsContent>
+          <TabsContent value="reports"><ReportsView /></TabsContent>
           <TabsContent value="activity"><ActivityLogView /></TabsContent>
           <TabsContent value="settings"><SettingsView /></TabsContent>
         </Tabs>
