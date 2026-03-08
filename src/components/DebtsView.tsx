@@ -381,9 +381,9 @@ export default function DebtsView() {
           <PlusCircle className="h-4 w-4 ml-1" />
           חיוב נוסף
         </Button>
-        <Button variant="outline" onClick={() => setCashOverrideDialog(true)}>
-          <RefreshCw className="h-4 w-4 ml-1" />
-          תשלום מזומן במקום בנק
+        <Button variant="outline" onClick={() => setCashPayDialog(true)}>
+          <Banknote className="h-4 w-4 ml-1" />
+          שלם במזומן
         </Button>
       </div>
 
