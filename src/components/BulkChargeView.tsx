@@ -130,6 +130,7 @@ export default function BulkChargeView() {
       setAmount(0);
       setAmperes(0);
       setNotes('');
+      setSpreadMonths(1);
       loadData();
     } catch (e) {
       toast.error('שגיאה ביצירת חיוב גורף');
