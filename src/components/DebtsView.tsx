@@ -140,7 +140,9 @@ export default function DebtsView() {
     if (!advanceCustomerId) return;
     const cust = customers.find(c => c.id === Number(advanceCustomerId));
     if (!cust) return;
-    const cashAmt = cust.paymentMethod === 'mixed' ? cust.cashAmount : cust.monthlyAmount;
+    const pricePerAmpere = settings?.pricePerAmpere || 0;
+    const monthlyAmt = getCustomerMonthlyAmount(cust, pricePerAmpere);
+    const cashAmt = cust.paymentMethod === 'mixed' ? cust.cashAmount : monthlyAmt;
     if (cashAmt <= 0) { toast.error('לא הוגדר סכום חודשי'); return; }
 
     const now = new Date();
