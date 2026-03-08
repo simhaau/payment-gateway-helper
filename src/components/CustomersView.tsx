@@ -12,7 +12,7 @@ import { parseCSVCustomers } from '@/lib/csvImport';
 import { getCustomerMonthlyAmount } from '@/lib/billing';
 import CustomerDialog from './CustomerDialog';
 import CustomerDetailView from './CustomerDetailView';
-import type { Customer, Group, Settings } from '@/lib/types';
+import type { Customer, Group, Settings, DebtRecord } from '@/lib/types';
 import { toast } from 'sonner';
 
 const PAGE_SIZE = 50;
