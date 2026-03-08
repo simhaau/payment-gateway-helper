@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { LayoutDashboard, Users, FolderKanban, CreditCard, Settings, Banknote } from 'lucide-react';
+import { LayoutDashboard, Users, FolderKanban, CreditCard, Settings, Banknote, History } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import DashboardView from '@/components/DashboardView';
 import CustomersView from '@/components/CustomersView';
