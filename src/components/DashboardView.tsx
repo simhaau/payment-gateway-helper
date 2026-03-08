@@ -3,10 +3,10 @@ import { Users, TrendingUp, CreditCard, Calendar, Zap, AlertTriangle } from 'luc
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { getAllCustomers, getAllBatches, getAllGroups } from '@/lib/db';
-import { calculateExpectedMonthlyIncome, getCustomersDueForBilling } from '@/lib/billing';
+import { getAllCustomers, getAllBatches, getAllGroups, getSettings } from '@/lib/db';
+import { calculateExpectedMonthlyIncome, getCustomersDueForBilling, getCustomerMonthlyAmount } from '@/lib/billing';
 import DashboardCharts from './DashboardCharts';
-import type { Customer, BillingBatch, Group } from '@/lib/types';
+import type { Customer, BillingBatch, Group, Settings } from '@/lib/types';
 
 interface DashboardViewProps {
   onNavigate: (tab: string) => void;
@@ -16,14 +16,16 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [batches, setBatches] = useState<BillingBatch[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
+  const [settings, setSettings] = useState<Settings | null>(null);
 
   useEffect(() => {
-    Promise.all([getAllCustomers(), getAllBatches(), getAllGroups()])
-      .then(([c, b, g]) => { setCustomers(c); setBatches(b); setGroups(g); });
+    Promise.all([getAllCustomers(), getAllBatches(), getAllGroups(), getSettings()])
+      .then(([c, b, g, s]) => { setCustomers(c); setBatches(b); setGroups(g); setSettings(s); });
   }, []);
 
+  const pricePerAmpere = settings?.pricePerAmpere || 0;
   const activeCustomers = useMemo(() => customers.filter(c => c.status === 'active'), [customers]);
-  const expectedIncome = useMemo(() => calculateExpectedMonthlyIncome(customers), [customers]);
+  const expectedIncome = useMemo(() => calculateExpectedMonthlyIncome(customers, pricePerAmpere), [customers, pricePerAmpere]);
   const dueCustomers = useMemo(() => getCustomersDueForBilling(customers), [customers]);
   const lastBatch = useMemo(() => batches.sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0], [batches]);
   const pausedCount = useMemo(() => customers.filter(c => c.status === 'paused').length, [customers]);
@@ -55,7 +57,7 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
       </div>
 
       {/* Charts */}
-      <DashboardCharts customers={customers} groups={groups} batches={batches} />
+      <DashboardCharts customers={customers} groups={groups} batches={batches} pricePerAmpere={pricePerAmpere} />
 
       {/* Quick Actions + Due Customers */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -91,17 +93,20 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
               <p className="text-muted-foreground text-sm">אין לקוחות לגבייה כרגע</p>
             ) : (
               <div className="space-y-2 max-h-48 overflow-y-auto">
-                {dueCustomers.slice(0, 10).map(c => (
-                  <div key={c.id} className="flex items-center justify-between py-2 border-b border-border/50 last:border-0">
-                    <div>
-                      <p className="text-sm font-medium">{c.fullName}</p>
-                      <p className="text-xs text-muted-foreground">חשבון: {c.accountNumber}</p>
+                {dueCustomers.slice(0, 10).map(c => {
+                  const amt = getCustomerMonthlyAmount(c, pricePerAmpere);
+                  return (
+                    <div key={c.id} className="flex items-center justify-between py-2 border-b border-border/50 last:border-0">
+                      <div>
+                        <p className="text-sm font-medium">{c.nickname || c.fullName}</p>
+                        <p className="text-xs text-muted-foreground">{c.amperes} אמפר</p>
+                      </div>
+                      <Badge variant="outline" className="text-success border-success/30">
+                        ₪{amt.toLocaleString()}
+                      </Badge>
                     </div>
-                    <Badge variant="outline" className="text-success border-success/30">
-                      ₪{c.monthlyAmount.toLocaleString()}
-                    </Badge>
-                  </div>
-                ))}
+                  );
+                })}
                 {dueCustomers.length > 10 && (
                   <p className="text-xs text-muted-foreground text-center pt-2">
                     ועוד {dueCustomers.length - 10} לקוחות...
