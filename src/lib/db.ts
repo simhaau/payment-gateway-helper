@@ -8,10 +8,35 @@ let dbInstance: IDBDatabase | null = null;
 
 function openDB(): Promise<IDBDatabase> {
   if (dbInstance) return Promise.resolve(dbInstance);
+
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onerror = () => reject(req.error);
-    req.onsuccess = () => { dbInstance = req.result; resolve(dbInstance); };
+    const timeout = setTimeout(() => {
+      reject(new Error('IndexedDB open timed out (possible blocked upgrade)'));
+    }, 10000);
+
+    const clear = () => clearTimeout(timeout);
+
+    req.onerror = () => {
+      clear();
+      reject(req.error);
+    };
+
+    req.onblocked = () => {
+      clear();
+      reject(new Error('IndexedDB is blocked by another open tab/version'));
+    };
+
+    req.onsuccess = () => {
+      clear();
+      dbInstance = req.result;
+      dbInstance.onversionchange = () => {
+        dbInstance?.close();
+        dbInstance = null;
+      };
+      resolve(dbInstance);
+    };
+
     req.onupgradeneeded = (e) => {
       const db = (e.target as IDBOpenDBRequest).result;
       if (!db.objectStoreNames.contains('customers')) {
