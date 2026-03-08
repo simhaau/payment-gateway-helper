@@ -140,7 +140,7 @@ export default function CustomerDialog({ open, onOpenChange, customer, groups, o
           <DialogDescription>{isEdit ? 'ערוך את פרטי הלקוח' : 'הזן את פרטי הלקוח החדש'}</DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6">
+        <form onSubmit={(e) => { e.preventDefault(); handleSave(); }} className="space-y-6">
           {/* Personal Info */}
           <div>
             <h3 className="text-sm font-semibold mb-3 text-primary">פרטים אישיים</h3>
@@ -320,11 +320,11 @@ export default function CustomerDialog({ open, onOpenChange, customer, groups, o
           </div>
 
           {/* Actions */}
-          <div className="flex justify-end gap-3 pt-2">
+          <div className="flex justify-end gap-3 pt-2 sticky bottom-0 bg-background pb-2">
             <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>ביטול</Button>
-            <Button type="button" onClick={handleSave}>{isEdit ? 'שמור שינויים' : 'הוסף לקוח'}</Button>
+            <Button type="submit">{isEdit ? 'שמור שינויים' : 'הוסף לקוח'}</Button>
           </div>
-        </div>
+        </form>
       </DialogContent>
     </Dialog>
   );
