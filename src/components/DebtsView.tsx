@@ -455,7 +455,8 @@ export default function DebtsView() {
               <TableHead>שולם</TableHead>
               <TableHead>יתרה</TableHead>
               <TableHead>סטטוס</TableHead>
-              <TableHead className="w-24">פעולות</TableHead>
+              <TableHead>הערות</TableHead>
+              <TableHead className="w-32">פעולות</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
