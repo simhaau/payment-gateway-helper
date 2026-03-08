@@ -381,10 +381,20 @@ export default function CustomerDetailView({ customer, onBack }: Props) {
             <Badge className={statusLabel.color}>{statusLabel.label}</Badge>
           </div>
         </div>
-        <Button onClick={() => setAddChargeDialog(true)} className="gap-2">
-          <Plus className="h-4 w-4" />
-          הוסף חיוב
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button onClick={() => setAddChargeDialog(true)} className="gap-2">
+            <Plus className="h-4 w-4" />
+            הוסף חיוב
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleExportCustomerPDF} className="gap-1">
+            <FileText className="h-3.5 w-3.5" />
+            PDF
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleExportCustomerExcel} className="gap-1">
+            <FileSpreadsheet className="h-3.5 w-3.5" />
+            Excel
+          </Button>
+        </div>
       </div>
 
       {/* Quick Info Cards */}
