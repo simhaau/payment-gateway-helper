@@ -727,47 +727,65 @@ export default function DebtsView() {
         </DialogContent>
       </Dialog>
 
-      {/* Cash Override Dialog */}
-      <Dialog open={cashOverrideDialog} onOpenChange={setCashOverrideDialog}>
+      {/* Cash Payment Dialog */}
+      <Dialog open={cashPayDialog} onOpenChange={setCashPayDialog}>
         <DialogContent onPointerDownOutside={e => e.preventDefault()}>
           <DialogHeader>
-            <DialogTitle>תשלום מזומן במקום בנק</DialogTitle>
-            <DialogDescription>צור חיוב מזומן ללקוח בנק לחודש ספציפי — במקום גבייה דרך הבנק</DialogDescription>
+            <DialogTitle>תשלום במזומן</DialogTitle>
+            <DialogDescription>בחר לקוח וחוב לתשלום במזומן — גם ללקוחות בנק</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
-              <Label>לקוח (בנק/משולב)</Label>
-              <Select value={cashOverrideCustomerId} onValueChange={setCashOverrideCustomerId}>
+              <Label>לקוח</Label>
+              <Select value={cashPayCustomerId} onValueChange={v => { setCashPayCustomerId(v); setCashPayDebtId(''); setCashPayAmount(0); }}>
                 <SelectTrigger><SelectValue placeholder="בחר לקוח" /></SelectTrigger>
                 <SelectContent>
-                  {bankCustomers.map(c => (
+                  {customers.filter(c => c.status === 'active').map(c => (
                     <SelectItem key={c.id} value={String(c.id)}>
-                      {c.nickname || c.fullName} (₪{(c.paymentMethod === 'mixed' ? c.bankAmount : c.monthlyAmount).toLocaleString()}/חודש)
+                      {c.nickname || c.fullName} ({c.paymentMethod === 'bank' ? 'בנק' : c.paymentMethod === 'mixed' ? 'משולב' : 'מזומן'})
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1.5">
-              <Label>חודש</Label>
-              <Input type="month" dir="ltr" value={cashOverrideMonth} onChange={e => setCashOverrideMonth(e.target.value)} />
-            </div>
-            {cashOverrideCustomerId && (
-              <div className="text-sm bg-muted/50 rounded-lg p-3">
-                {(() => {
-                  const c = customers.find(c => c.id === Number(cashOverrideCustomerId));
-                  if (!c) return null;
-                  const amt = c.paymentMethod === 'mixed' ? c.bankAmount : c.monthlyAmount;
-                  return <p>הסכום שייווצר כחיוב מזומן: <span className="font-semibold">₪{amt.toLocaleString()}</span></p>;
-                })()}
-              </div>
-            )}
+            {cashPayCustomerId && (() => {
+              const customerDebts = debts.filter(d => d.customerId === Number(cashPayCustomerId) && d.status !== 'paid' && d.status !== 'advance');
+              return customerDebts.length > 0 ? (
+                <>
+                  <div className="space-y-1.5">
+                    <Label>חוב לתשלום</Label>
+                    <Select value={cashPayDebtId} onValueChange={v => {
+                      setCashPayDebtId(v);
+                      const d = customerDebts.find(d => d.id === Number(v));
+                      if (d) setCashPayAmount(d.amount - d.paidAmount);
+                    }}>
+                      <SelectTrigger><SelectValue placeholder="בחר חוב" /></SelectTrigger>
+                      <SelectContent>
+                        {customerDebts.map(d => (
+                          <SelectItem key={d.id} value={String(d.id)}>
+                            {d.month} — יתרה ₪{(d.amount - d.paidAmount).toLocaleString()} {d.notes ? `(${d.notes})` : ''}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {cashPayDebtId && (
+                    <div className="space-y-1.5">
+                      <Label>סכום לתשלום (₪)</Label>
+                      <Input type="number" dir="ltr" value={cashPayAmount || ''} onChange={e => setCashPayAmount(Number(e.target.value) || 0)} />
+                    </div>
+                  )}
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">אין חובות פתוחים ללקוח זה</p>
+              );
+            })()}
           </div>
           <div className="flex justify-end gap-3">
-            <Button variant="secondary" onClick={() => setCashOverrideDialog(false)}>ביטול</Button>
-            <Button onClick={handleCashOverride} disabled={!cashOverrideCustomerId}>
-              <RefreshCw className="h-4 w-4 ml-1" />
-              צור חיוב מזומן
+            <Button variant="secondary" onClick={() => setCashPayDialog(false)}>ביטול</Button>
+            <Button onClick={handleCashPay} disabled={!cashPayDebtId || cashPayAmount <= 0}>
+              <Banknote className="h-4 w-4 ml-1" />
+              שלם במזומן
             </Button>
           </div>
         </DialogContent>
