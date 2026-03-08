@@ -104,7 +104,23 @@ export default function CustomerDetailView({ customer, onBack }: Props) {
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }, [batches, customer.id]);
 
-  // Monthly breakdown sorted desc
+  // Future months with debts
+  const futureMonthDebts = useMemo(() => {
+    return debts.filter(d => d.month > currentMonth);
+  }, [debts, currentMonth]);
+
+  const futureMonthBreakdown = useMemo(() => {
+    const map = new Map<string, { debts: DebtRecord[]; total: number }>();
+    futureMonthDebts.forEach(d => {
+      const existing = map.get(d.month) || { debts: [], total: 0 };
+      existing.debts.push(d);
+      if (d.status !== 'suspended') existing.total += d.amount;
+      map.set(d.month, existing);
+    });
+    return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b)).map(([month, data]) => ({ month, ...data }));
+  }, [futureMonthDebts]);
+
+  // Monthly breakdown sorted desc (only past + current)
   const monthlyBreakdown = useMemo(() => {
     const map = new Map<string, { debts: DebtRecord[]; total: number; paid: number }>();
     debts.forEach(d => {
