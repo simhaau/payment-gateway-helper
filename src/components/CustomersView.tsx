@@ -234,6 +234,7 @@ export default function CustomersView() {
               <TableHead>בנק/סניף/חשבון</TableHead>
               <TableHead>אמפרים</TableHead>
               <TableHead>סכום חודשי</TableHead>
+              <TableHead>חיוב החודש</TableHead>
               <TableHead>קבוצה</TableHead>
               <TableHead>סטטוס</TableHead>
               <TableHead className="w-24">פעולות</TableHead>
