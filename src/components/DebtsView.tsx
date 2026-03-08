@@ -56,6 +56,11 @@ export default function DebtsView() {
     [customers]
   );
 
+  const allActiveCustomers = useMemo(() =>
+    customers.filter(c => c.status === 'active'),
+    [customers]
+  );
+
   const displayName = (c: Customer) => c.nickname || c.fullName;
 
   const filteredDebts = useMemo(() => {
