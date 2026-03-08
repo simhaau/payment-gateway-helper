@@ -44,6 +44,7 @@ export default function CustomersView() {
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [bulkGroupDialogOpen, setBulkGroupDialogOpen] = useState(false);
   const [bulkGroupId, setBulkGroupId] = useState<string>('');
+  const [viewingCustomer, setViewingCustomer] = useState<Customer | null>(null);
 
   const loadData = () => {
     Promise.all([getAllCustomers(), getAllGroups(), getSettings()])
