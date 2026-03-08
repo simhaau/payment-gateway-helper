@@ -86,10 +86,12 @@ export default function DebtsView() {
 
   const handleGenerateDebts = async () => {
     let count = 0;
+    const pricePerAmpere = settings?.pricePerAmpere || 0;
     for (const c of cashCustomers) {
       const existing = debts.find(d => d.customerId === c.id && d.month === generateMonth);
       if (existing) continue;
-      const cashAmt = c.paymentMethod === 'mixed' ? c.cashAmount : c.monthlyAmount;
+      const monthlyAmt = getCustomerMonthlyAmount(c, pricePerAmpere);
+      const cashAmt = c.paymentMethod === 'mixed' ? c.cashAmount : monthlyAmt;
       if (cashAmt <= 0) continue;
       await addDebt({
         customerId: c.id!,
