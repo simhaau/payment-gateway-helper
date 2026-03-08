@@ -38,13 +38,11 @@ export default function DebtsView() {
   const [extraChargeCustomerId, setExtraChargeCustomerId] = useState('');
   const [extraChargeAmount, setExtraChargeAmount] = useState(0);
   const [extraChargeNotes, setExtraChargeNotes] = useState('');
-  // Cash override dialog
-  const [cashOverrideDialog, setCashOverrideDialog] = useState(false);
-  const [cashOverrideCustomerId, setCashOverrideCustomerId] = useState('');
-  const [cashOverrideMonth, setCashOverrideMonth] = useState(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  });
+  // Cash payment dialog (pay any customer's debt in cash)
+  const [cashPayDialog, setCashPayDialog] = useState(false);
+  const [cashPayCustomerId, setCashPayCustomerId] = useState('');
+  const [cashPayDebtId, setCashPayDebtId] = useState('');
+  const [cashPayAmount, setCashPayAmount] = useState(0);
 
   const loadData = () => {
     Promise.all([getAllCustomers(), getAllDebts()])
