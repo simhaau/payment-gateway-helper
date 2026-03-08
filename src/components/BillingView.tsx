@@ -6,30 +6,40 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { getAllCustomers, getAllGroups, getAllBatches, addBatch, updateBatch, getSettings } from '@/lib/db';
+import { getAllCustomers, getAllGroups, getAllBatches, getAllDebts, addBatch, updateBatch, getSettings } from '@/lib/db';
 import { getCustomersDueForBilling, createBillingBatch } from '@/lib/billing';
 import { generateMasavFile, validateBatchForMasav, downloadMasavFile } from '@/lib/masav';
-import type { Customer, Group, BillingBatch, Settings } from '@/lib/types';
+import type { Customer, Group, BillingBatch, DebtRecord, Settings } from '@/lib/types';
 import { toast } from 'sonner';
 
 export default function BillingView() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [batches, setBatches] = useState<BillingBatch[]>([]);
+  const [debts, setDebts] = useState<DebtRecord[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [scope, setScope] = useState('all');
   const [groupId, setGroupId] = useState('');
   const [singleCustomerId, setSingleCustomerId] = useState('');
   const [valueDate, setValueDate] = useState(new Date().toISOString().split('T')[0]);
+  const [billingMonths, setBillingMonths] = useState(1);
+  const [includeExtraDebts, setIncludeExtraDebts] = useState(true);
   const [creating, setCreating] = useState(false);
   const [viewBatch, setViewBatch] = useState<BillingBatch | null>(null);
   const [confirmCreate, setConfirmCreate] = useState(false);
 
   const loadData = () => {
-    Promise.all([getAllCustomers(), getAllGroups(), getAllBatches(), getSettings()])
-      .then(([c, g, b, s]) => { setCustomers(c); setGroups(g); setBatches(b.sort((a, b) => b.createdAt.localeCompare(a.createdAt))); setSettings(s); });
+    Promise.all([getAllCustomers(), getAllGroups(), getAllBatches(), getSettings(), getAllDebts()])
+      .then(([c, g, b, s, d]) => {
+        setCustomers(c);
+        setGroups(g);
+        setBatches(b.sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
+        setSettings(s);
+        setDebts(d);
+      });
   };
 
   useEffect(() => { loadData(); }, []);
@@ -45,14 +55,28 @@ export default function BillingView() {
     return due;
   };
 
+  // Get unpaid debts for bank customers (extra charges)
+  const getExtraDebts = (): DebtRecord[] => {
+    if (!includeExtraDebts) return [];
+    const targets = getTargetCustomers();
+    const targetIds = new Set(targets.map(c => c.id!));
+    return debts.filter(d =>
+      targetIds.has(d.customerId) &&
+      d.status !== 'paid' &&
+      d.status !== 'advance' &&
+      d.notes // Only include debts with notes (extra charges)
+    );
+  };
+
   const handleCreateBatch = async () => {
     setCreating(true);
     try {
       const targets = getTargetCustomers();
       if (targets.length === 0) { toast.error('אין לקוחות לגבייה'); return; }
-      const batch = createBillingBatch(targets, valueDate);
+      const extras = getExtraDebts();
+      const batch = createBillingBatch(targets, valueDate, extras, billingMonths);
       await addBatch(batch);
-      toast.success(`אצוות גבייה נוצרה: ${batch.transactionCount} פעולות, ₪${batch.totalAmount.toLocaleString()}`);
+      toast.success(`אצוות גבייה נוצרה: ${batch.transactionCount} פעולות, ₪${batch.totalAmount.toLocaleString()}${billingMonths > 1 ? ` (${billingMonths} חודשים)` : ''}`);
       loadData();
     } catch (e) {
       toast.error('שגיאה ביצירת אצוות');
@@ -78,6 +102,7 @@ export default function BillingView() {
   };
 
   const targetCount = getTargetCustomers().length;
+  const extraDebtsCount = getExtraDebts().length;
   const displayName = (c: Customer) => c.nickname || c.fullName;
 
   return (
@@ -90,7 +115,7 @@ export default function BillingView() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">היקף</Label>
               <Select value={scope} onValueChange={setScope}>
@@ -132,9 +157,37 @@ export default function BillingView() {
               <Label className="text-xs text-muted-foreground">תאריך ערך</Label>
               <Input type="date" value={valueDate} onChange={e => setValueDate(e.target.value)} dir="ltr" />
             </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end mt-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">מספר חודשים לגבייה</Label>
+              <Select value={String(billingMonths)} onValueChange={v => setBillingMonths(Number(v))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {[1, 2, 3, 4, 5, 6, 12].map(m => (
+                    <SelectItem key={m} value={String(m)}>
+                      {m === 1 ? 'חודש אחד' : `${m} חודשים`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex items-center gap-2 pb-1">
+              <Checkbox
+                id="includeExtras"
+                checked={includeExtraDebts}
+                onCheckedChange={v => setIncludeExtraDebts(!!v)}
+              />
+              <Label htmlFor="includeExtras" className="text-sm cursor-pointer">
+                כלול חיובים נוספים ({extraDebtsCount})
+              </Label>
+            </div>
+
             <Button onClick={() => setConfirmCreate(true)} disabled={creating || targetCount === 0}>
               {creating ? <Loader2 className="h-4 w-4 animate-spin ml-1" /> : <CreditCard className="h-4 w-4 ml-1" />}
-              צור אצוות ({targetCount} לקוחות)
+              צור אצוות ({targetCount} לקוחות{billingMonths > 1 ? ` × ${billingMonths} חודשים` : ''})
             </Button>
           </div>
         </CardContent>
@@ -206,6 +259,7 @@ export default function BillingView() {
                   <TableHead>חשבון</TableHead>
                   <TableHead>סכום</TableHead>
                   <TableHead>סטטוס</TableHead>
+                  <TableHead>הערות</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -220,6 +274,9 @@ export default function BillingView() {
                       {t.status === 'included' ? <CheckCircle2 className="h-4 w-4 text-success" /> : (
                         <span className="text-destructive text-xs flex items-center gap-1"><AlertCircle className="h-3.5 w-3.5" />{t.errorMessage}</span>
                       )}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground max-w-[150px] truncate">
+                      {t.status === 'included' && t.errorMessage}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -241,6 +298,8 @@ export default function BillingView() {
             <AlertDialogTitle>יצירת אצוות גבייה</AlertDialogTitle>
             <AlertDialogDescription>
               ייווצרו {targetCount} פעולות גבייה עם תאריך ערך {new Date(valueDate).toLocaleDateString('he-IL')}.
+              {billingMonths > 1 && <><br />גבייה עבור {billingMonths} חודשים.</>}
+              {extraDebtsCount > 0 && includeExtraDebts && <><br />כולל {extraDebtsCount} חיובים נוספים.</>}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
