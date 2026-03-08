@@ -230,6 +230,13 @@ export default function BulkChargeView() {
               <Label className="text-xs text-muted-foreground">הערות</Label>
               <Textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="תיאור החיוב..." rows={1} />
             </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">פריסה לחודשים</Label>
+              <Input type="number" min={1} max={24} value={spreadMonths} onChange={e => setSpreadMonths(Math.max(1, Number(e.target.value)))} />
+              {spreadMonths > 1 && (
+                <p className="text-xs text-muted-foreground">₪{chargeAmount.toLocaleString()} × {spreadMonths} חודשים = ₪{(chargeAmount * spreadMonths).toLocaleString()} סה"כ לכל לקוח</p>
+              )}
+            </div>
           </div>
 
           <div className="flex items-center gap-4 mt-4">
