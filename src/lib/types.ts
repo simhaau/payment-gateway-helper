@@ -1,11 +1,15 @@
 export interface Customer {
   id?: number;
   fullName: string;
+  nickname: string;
   idNumber: string;
   phone: string;
   email: string;
   address: string;
   notes: string;
+  paymentMethod: 'bank' | 'cash' | 'mixed';
+  bankAmount: number; // for mixed: amount via bank
+  cashAmount: number; // for mixed: amount via cash
   bankNumber: string;
   branchNumber: string;
   accountNumber: string;
@@ -29,6 +33,19 @@ export interface Group {
   name: string;
   description: string;
   color: string;
+  createdAt: string;
+}
+
+export interface DebtRecord {
+  id?: number;
+  customerId: number;
+  customerName: string;
+  month: string; // YYYY-MM
+  amount: number;
+  paidAmount: number;
+  status: 'unpaid' | 'partial' | 'paid' | 'advance';
+  paidDate: string;
+  notes: string;
   createdAt: string;
 }
 
@@ -79,11 +96,15 @@ export const DEFAULT_SETTINGS: Settings = {
 
 export const EMPTY_CUSTOMER: Omit<Customer, 'id' | 'createdAt' | 'updatedAt'> = {
   fullName: '',
+  nickname: '',
   idNumber: '',
   phone: '',
   email: '',
   address: '',
   notes: '',
+  paymentMethod: 'bank',
+  bankAmount: 0,
+  cashAmount: 0,
   bankNumber: '',
   branchNumber: '',
   accountNumber: '',

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Plus, Search, Trash2, Edit, Copy, Users, Download, Filter, Upload } from 'lucide-react';
+import { Plus, Search, Trash2, Edit, Copy, Users, Download, Filter, Upload, Banknote, Building2, Shuffle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -21,12 +21,19 @@ const STATUS_MAP: Record<string, { label: string; variant: 'default' | 'secondar
   cancelled: { label: 'מבוטל', variant: 'destructive' },
 };
 
+const PAYMENT_ICONS: Record<string, { icon: typeof Building2; label: string }> = {
+  bank: { icon: Building2, label: 'בנק' },
+  cash: { icon: Banknote, label: 'מזומן' },
+  mixed: { icon: Shuffle, label: 'משולב' },
+};
+
 export default function CustomersView() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [groupFilter, setGroupFilter] = useState('all');
+  const [paymentFilter, setPaymentFilter] = useState('all');
   const [page, setPage] = useState(0);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -40,7 +47,6 @@ export default function CustomersView() {
       .then(([c, g]) => { setCustomers(c); setGroups(g); });
   };
 
-  // Load once on mount
   useEffect(() => { loadData(); }, []);
 
   const filtered = useMemo(() => {
@@ -49,6 +55,7 @@ export default function CustomersView() {
       const q = search.toLowerCase();
       result = result.filter(c =>
         c.fullName.toLowerCase().includes(q) ||
+        (c.nickname || '').toLowerCase().includes(q) ||
         c.phone.includes(q) ||
         c.idNumber.includes(q) ||
         c.accountNumber.includes(q) ||
@@ -57,20 +64,16 @@ export default function CustomersView() {
     }
     if (statusFilter !== 'all') result = result.filter(c => c.status === statusFilter);
     if (groupFilter !== 'all') result = result.filter(c => String(c.groupId) === groupFilter);
+    if (paymentFilter !== 'all') result = result.filter(c => (c.paymentMethod || 'bank') === paymentFilter);
     return result;
-  }, [customers, search, statusFilter, groupFilter]);
+  }, [customers, search, statusFilter, groupFilter, paymentFilter]);
 
   const paged = useMemo(() => filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE), [filtered, page]);
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
 
   const toggleSelect = (id: number) => {
-    setSelected(prev => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
+    setSelected(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
   };
-
   const toggleAll = () => {
     if (selected.size === paged.length) setSelected(new Set());
     else setSelected(new Set(paged.map(c => c.id!)));
@@ -86,7 +89,7 @@ export default function CustomersView() {
 
   const handleDuplicate = async (c: Customer) => {
     const { id, createdAt, updatedAt, ...rest } = c;
-    await addCustomer({ ...rest, fullName: `${rest.fullName} (העתק)`, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+    await addCustomer({ ...rest, fullName: `${rest.fullName} (copy)`, nickname: rest.nickname ? `${rest.nickname} (העתק)` : '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
     toast.success('לקוח שוכפל');
     loadData();
   };
@@ -101,23 +104,14 @@ export default function CustomersView() {
     loadData();
   };
 
-  const handleDialogSaved = () => {
-    loadData();
-  };
+  const openNewCustomer = () => { setEditingCustomer(null); setDialogOpen(true); };
+  const openEditCustomer = (c: Customer) => { setEditingCustomer(c); setDialogOpen(true); };
 
-  const openNewCustomer = () => {
-    setEditingCustomer(null);
-    setDialogOpen(true);
-  };
-
-  const openEditCustomer = (c: Customer) => {
-    setEditingCustomer(c);
-    setDialogOpen(true);
-  };
+  const displayName = (c: Customer) => c.nickname || c.fullName;
 
   const exportCSV = () => {
-    const headers = ['שם', 'ת.ז', 'טלפון', 'אימייל', 'בנק', 'סניף', 'חשבון', 'סכום', 'סטטוס'];
-    const rows = filtered.map(c => [c.fullName, c.idNumber, c.phone, c.email, c.bankNumber, c.branchNumber, c.accountNumber, c.monthlyAmount, STATUS_MAP[c.status]?.label || c.status]);
+    const headers = ['שם', 'כינוי', 'ת.ז', 'טלפון', 'אימייל', 'תשלום', 'בנק', 'סניף', 'חשבון', 'סכום', 'סטטוס'];
+    const rows = filtered.map(c => [c.fullName, c.nickname || '', c.idNumber, c.phone, c.email, PAYMENT_ICONS[c.paymentMethod || 'bank']?.label || 'בנק', c.bankNumber, c.branchNumber, c.accountNumber, c.monthlyAmount, STATUS_MAP[c.status]?.label || c.status]);
     const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a');
@@ -136,10 +130,7 @@ export default function CustomersView() {
       try {
         const text = await file.text();
         const parsed = parseCSVCustomers(text);
-        if (parsed.length === 0) {
-          toast.error('לא נמצאו לקוחות בקובץ');
-          return;
-        }
+        if (parsed.length === 0) { toast.error('לא נמצאו לקוחות בקובץ'); return; }
         const now = new Date().toISOString();
         let added = 0;
         for (const c of parsed) {
@@ -148,9 +139,7 @@ export default function CustomersView() {
         }
         toast.success(`${added} לקוחות יובאו בהצלחה`);
         loadData();
-      } catch (err) {
-        toast.error('שגיאה בייבוא הקובץ');
-      }
+      } catch (err) { toast.error('שגיאה בייבוא הקובץ'); }
     };
     input.click();
   };
@@ -166,18 +155,10 @@ export default function CustomersView() {
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-[250px]">
           <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="חיפוש לפי שם, טלפון, ת.ז, חשבון..."
-            value={search}
-            onChange={e => { setSearch(e.target.value); setPage(0); }}
-            className="pr-10"
-          />
+          <Input placeholder="חיפוש לפי שם, כינוי, טלפון, ת.ז..." value={search} onChange={e => { setSearch(e.target.value); setPage(0); }} className="pr-10" />
         </div>
         <Select value={statusFilter} onValueChange={v => { setStatusFilter(v); setPage(0); }}>
-          <SelectTrigger className="w-[130px]">
-            <Filter className="h-3.5 w-3.5 ml-1" />
-            <SelectValue />
-          </SelectTrigger>
+          <SelectTrigger className="w-[130px]"><Filter className="h-3.5 w-3.5 ml-1" /><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">כל הסטטוסים</SelectItem>
             <SelectItem value="active">פעיל</SelectItem>
@@ -185,59 +166,48 @@ export default function CustomersView() {
             <SelectItem value="cancelled">מבוטל</SelectItem>
           </SelectContent>
         </Select>
+        <Select value={paymentFilter} onValueChange={v => { setPaymentFilter(v); setPage(0); }}>
+          <SelectTrigger className="w-[130px]"><Banknote className="h-3.5 w-3.5 ml-1" /><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">כל התשלומים</SelectItem>
+            <SelectItem value="bank">בנק</SelectItem>
+            <SelectItem value="cash">מזומן</SelectItem>
+            <SelectItem value="mixed">משולב</SelectItem>
+          </SelectContent>
+        </Select>
         <Select value={groupFilter} onValueChange={v => { setGroupFilter(v); setPage(0); }}>
-          <SelectTrigger className="w-[140px]">
-            <Users className="h-3.5 w-3.5 ml-1" />
-            <SelectValue />
-          </SelectTrigger>
+          <SelectTrigger className="w-[140px]"><Users className="h-3.5 w-3.5 ml-1" /><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">כל הקבוצות</SelectItem>
             {groups.map(g => <SelectItem key={g.id} value={String(g.id)}>{g.name}</SelectItem>)}
           </SelectContent>
         </Select>
-        <Button onClick={openNewCustomer}>
-          <Plus className="h-4 w-4 ml-1" />
-          לקוח חדש
-        </Button>
-        <Button variant="secondary" onClick={exportCSV}>
-          <Download className="h-4 w-4 ml-1" />
-          ייצוא
-        </Button>
-        <Button variant="secondary" onClick={handleImportCSV}>
-          <Upload className="h-4 w-4 ml-1" />
-          ייבוא CSV
-        </Button>
+        <Button onClick={openNewCustomer}><Plus className="h-4 w-4 ml-1" />לקוח חדש</Button>
+        <Button variant="secondary" onClick={exportCSV}><Download className="h-4 w-4 ml-1" />ייצוא</Button>
+        <Button variant="secondary" onClick={handleImportCSV}><Upload className="h-4 w-4 ml-1" />ייבוא CSV</Button>
       </div>
 
-      {/* Bulk Actions */}
       {selected.size > 0 && (
         <div className="flex items-center gap-3 p-3 bg-primary/10 rounded-lg border border-primary/20">
           <span className="text-sm font-medium">{selected.size} לקוחות נבחרו</span>
-          <Button size="sm" variant="secondary" onClick={() => setBulkGroupDialogOpen(true)}>
-            שיוך לקבוצה
-          </Button>
-          <Button size="sm" variant="secondary" onClick={() => setSelected(new Set())}>
-            בטל בחירה
-          </Button>
+          <Button size="sm" variant="secondary" onClick={() => setBulkGroupDialogOpen(true)}>שיוך לקבוצה</Button>
+          <Button size="sm" variant="secondary" onClick={() => setSelected(new Set())}>בטל בחירה</Button>
         </div>
       )}
 
-      {/* Summary */}
       <div className="text-sm text-muted-foreground">
-        {filtered.length} לקוחות {search || statusFilter !== 'all' || groupFilter !== 'all' ? '(מסוננים)' : ''}
+        {filtered.length} לקוחות {search || statusFilter !== 'all' || groupFilter !== 'all' || paymentFilter !== 'all' ? '(מסוננים)' : ''}
       </div>
 
-      {/* Table */}
       <div className="rounded-lg border border-border overflow-hidden bg-card">
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/50">
-              <TableHead className="w-10">
-                <Checkbox checked={paged.length > 0 && selected.size === paged.length} onCheckedChange={toggleAll} />
-              </TableHead>
-              <TableHead>שם</TableHead>
+              <TableHead className="w-10"><Checkbox checked={paged.length > 0 && selected.size === paged.length} onCheckedChange={toggleAll} /></TableHead>
+              <TableHead>שם / כינוי</TableHead>
               <TableHead>ת.ז</TableHead>
               <TableHead>טלפון</TableHead>
+              <TableHead>תשלום</TableHead>
               <TableHead>בנק/סניף/חשבון</TableHead>
               <TableHead>סכום חודשי</TableHead>
               <TableHead>קבוצה</TableHead>
@@ -246,46 +216,52 @@ export default function CustomersView() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {paged.map(c => (
-              <TableRow key={c.id} className="hover:bg-muted/30 transition-colors">
-                <TableCell>
-                  <Checkbox checked={selected.has(c.id!)} onCheckedChange={() => toggleSelect(c.id!)} />
-                </TableCell>
-                <TableCell className="font-medium">{c.fullName}</TableCell>
-                <TableCell className="text-muted-foreground text-sm font-mono">{c.idNumber}</TableCell>
-                <TableCell className="text-sm font-mono" dir="ltr">{c.phone}</TableCell>
-                <TableCell className="text-sm font-mono" dir="ltr">
-                  {c.bankNumber && `${c.bankNumber}-${c.branchNumber}-${c.accountNumber}`}
-                </TableCell>
-                <TableCell className="text-success font-medium">
-                  {c.monthlyAmount > 0 ? `₪${c.monthlyAmount.toLocaleString()}` : '-'}
-                </TableCell>
-                <TableCell>
-                  {c.groupId ? <Badge variant="outline">{groupName(c.groupId)}</Badge> : '-'}
-                </TableCell>
-                <TableCell>
-                  <Badge variant={STATUS_MAP[c.status]?.variant || 'secondary'}>
-                    {STATUS_MAP[c.status]?.label || c.status}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-1">
-                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEditCustomer(c)}>
-                      <Edit className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleDuplicate(c)}>
-                      <Copy className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => setDeleteId(c.id!)}>
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
+            {paged.map(c => {
+              const pm = PAYMENT_ICONS[c.paymentMethod || 'bank'];
+              const PayIcon = pm?.icon || Building2;
+              return (
+                <TableRow key={c.id} className="hover:bg-muted/30 transition-colors">
+                  <TableCell><Checkbox checked={selected.has(c.id!)} onCheckedChange={() => toggleSelect(c.id!)} /></TableCell>
+                  <TableCell>
+                    <div>
+                      <span className="font-medium">{displayName(c)}</span>
+                      {c.nickname && <span className="text-xs text-muted-foreground block" dir="ltr">{c.fullName}</span>}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground text-sm font-mono">{c.idNumber}</TableCell>
+                  <TableCell className="text-sm font-mono" dir="ltr">{c.phone}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className="gap-1 text-xs">
+                      <PayIcon className="h-3 w-3" />
+                      {pm?.label || 'בנק'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-sm font-mono" dir="ltr">
+                    {(c.paymentMethod || 'bank') !== 'cash' && c.bankNumber ? `${c.bankNumber}-${c.branchNumber}-${c.accountNumber}` : '-'}
+                  </TableCell>
+                  <TableCell className="text-success font-medium">
+                    {c.monthlyAmount > 0 ? `₪${c.monthlyAmount.toLocaleString()}` : '-'}
+                    {c.paymentMethod === 'mixed' && c.monthlyAmount > 0 && (
+                      <span className="text-xs text-muted-foreground block">
+                        בנק: ₪{(c.bankAmount || 0).toLocaleString()} | מזומן: ₪{(c.cashAmount || 0).toLocaleString()}
+                      </span>
+                    )}
+                  </TableCell>
+                  <TableCell>{c.groupId ? <Badge variant="outline">{groupName(c.groupId)}</Badge> : '-'}</TableCell>
+                  <TableCell><Badge variant={STATUS_MAP[c.status]?.variant || 'secondary'}>{STATUS_MAP[c.status]?.label || c.status}</Badge></TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1">
+                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEditCustomer(c)}><Edit className="h-3.5 w-3.5" /></Button>
+                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleDuplicate(c)}><Copy className="h-3.5 w-3.5" /></Button>
+                      <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => setDeleteId(c.id!)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
             {paged.length === 0 && (
               <TableRow>
-                <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
+                <TableCell colSpan={10} className="text-center py-12 text-muted-foreground">
                   {customers.length === 0 ? 'אין לקוחות עדיין. הוסף לקוח חדש כדי להתחיל.' : 'לא נמצאו תוצאות'}
                 </TableCell>
               </TableRow>
@@ -294,7 +270,6 @@ export default function CustomersView() {
         </Table>
       </div>
 
-      {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-center gap-2">
           <Button size="sm" variant="outline" disabled={page === 0} onClick={() => setPage(p => p - 1)}>הקודם</Button>
@@ -303,16 +278,8 @@ export default function CustomersView() {
         </div>
       )}
 
-      {/* Customer Dialog */}
-      <CustomerDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        customer={editingCustomer}
-        groups={groups}
-        onSaved={handleDialogSaved}
-      />
+      <CustomerDialog open={dialogOpen} onOpenChange={setDialogOpen} customer={editingCustomer} groups={groups} onSaved={() => loadData()} />
 
-      {/* Delete Confirm */}
       <AlertDialog open={deleteId !== null} onOpenChange={() => setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -326,7 +293,6 @@ export default function CustomersView() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Bulk Group Dialog */}
       <AlertDialog open={bulkGroupDialogOpen} onOpenChange={setBulkGroupDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -334,9 +300,7 @@ export default function CustomersView() {
             <AlertDialogDescription>בחר קבוצה לשיוך הלקוחות הנבחרים</AlertDialogDescription>
           </AlertDialogHeader>
           <Select value={bulkGroupId} onValueChange={setBulkGroupId}>
-            <SelectTrigger>
-              <SelectValue placeholder="בחר קבוצה" />
-            </SelectTrigger>
+            <SelectTrigger><SelectValue placeholder="בחר קבוצה" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="none">ללא קבוצה</SelectItem>
               {groups.map(g => <SelectItem key={g.id} value={String(g.id)}>{g.name}</SelectItem>)}
