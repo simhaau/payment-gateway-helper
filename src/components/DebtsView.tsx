@@ -26,6 +26,8 @@ export default function DebtsView() {
   });
   const [advanceDialog, setAdvanceDialog] = useState(false);
   const [advanceCustomerId, setAdvanceCustomerId] = useState('');
+  const [advanceMode, setAdvanceMode] = useState<'amount' | 'months'>('amount');
+  const [advanceTotalAmount, setAdvanceTotalAmount] = useState(0);
   const [advanceMonths, setAdvanceMonths] = useState(1);
   const [advanceAmount, setAdvanceAmount] = useState(0);
 
@@ -107,15 +109,64 @@ export default function DebtsView() {
     if (!advanceCustomerId) return;
     const cust = customers.find(c => c.id === Number(advanceCustomerId));
     if (!cust) return;
+    const cashAmt = cust.paymentMethod === 'mixed' ? cust.cashAmount : cust.monthlyAmount;
+    if (cashAmt <= 0) { toast.error('לא הוגדר סכום חודשי'); return; }
+
     const now = new Date();
     const baseMonth = new Date(now.getFullYear(), now.getMonth());
 
-    for (let i = 0; i < advanceMonths; i++) {
+    let monthsToPayFull: number;
+    let remainder = 0;
+
+    if (advanceMode === 'amount') {
+      if (advanceTotalAmount <= 0) { toast.error('הכנס סכום'); return; }
+      monthsToPayFull = Math.floor(advanceTotalAmount / cashAmt);
+      remainder = advanceTotalAmount - (monthsToPayFull * cashAmt);
+    } else {
+      monthsToPayFull = advanceMonths;
+    }
+
+    // First settle any existing unpaid/partial debts with the money
+    let totalUsed = 0;
+    const existingUnpaid = debts
+      .filter(d => d.customerId === cust.id && (d.status === 'unpaid' || d.status === 'partial'))
+      .sort((a, b) => a.month.localeCompare(b.month));
+
+    if (advanceMode === 'amount') {
+      let budget = advanceTotalAmount;
+      for (const d of existingUnpaid) {
+        if (budget <= 0) break;
+        const owed = d.amount - d.paidAmount;
+        const pay = Math.min(owed, budget);
+        const newPaid = d.paidAmount + pay;
+        const newStatus = newPaid >= d.amount ? 'paid' : 'partial';
+        await updateDebt({ ...d, paidAmount: newPaid, status: newStatus, paidDate: newStatus === 'paid' ? now.toISOString().split('T')[0] : d.paidDate });
+        budget -= pay;
+        totalUsed += pay;
+      }
+      // Recalculate months from remaining budget
+      if (budget > 0) {
+        monthsToPayFull = Math.floor(budget / cashAmt);
+        remainder = budget - (monthsToPayFull * cashAmt);
+      } else {
+        monthsToPayFull = 0;
+        remainder = 0;
+      }
+    }
+
+    // Create advance records for future months
+    let created = 0;
+    for (let i = 0; i < monthsToPayFull; i++) {
       const m = new Date(baseMonth.getFullYear(), baseMonth.getMonth() + i + 1);
       const month = `${m.getFullYear()}-${String(m.getMonth() + 1).padStart(2, '0')}`;
       const existing = debts.find(d => d.customerId === cust.id && d.month === month);
-      if (existing) continue;
-      const cashAmt = cust.paymentMethod === 'mixed' ? cust.cashAmount : cust.monthlyAmount;
+      if (existing) {
+        // Pay off existing debt for this month
+        if (existing.status !== 'paid' && existing.status !== 'advance') {
+          await updateDebt({ ...existing, paidAmount: existing.amount, status: 'advance', paidDate: now.toISOString().split('T')[0], notes: 'תשלום מראש' });
+        }
+        continue;
+      }
       await addDebt({
         customerId: cust.id!,
         customerName: cust.nickname || cust.fullName,
@@ -123,15 +174,46 @@ export default function DebtsView() {
         amount: cashAmt,
         paidAmount: cashAmt,
         status: 'advance',
-        paidDate: new Date().toISOString().split('T')[0],
+        paidDate: now.toISOString().split('T')[0],
         notes: 'תשלום מראש',
-        createdAt: new Date().toISOString(),
+        createdAt: now.toISOString(),
       });
+      created++;
     }
-    toast.success(`${advanceMonths} חודשים שולמו מראש`);
+
+    // Handle remainder as partial payment for the next month
+    if (remainder > 0) {
+      const nextM = new Date(baseMonth.getFullYear(), baseMonth.getMonth() + monthsToPayFull + 1);
+      const nextMonth = `${nextM.getFullYear()}-${String(nextM.getMonth() + 1).padStart(2, '0')}`;
+      const existingNext = debts.find(d => d.customerId === cust.id && d.month === nextMonth);
+      if (existingNext) {
+        const newPaid = Math.min(existingNext.paidAmount + remainder, existingNext.amount);
+        await updateDebt({ ...existingNext, paidAmount: newPaid, status: newPaid >= existingNext.amount ? 'advance' : 'partial', paidDate: now.toISOString().split('T')[0] });
+      } else {
+        await addDebt({
+          customerId: cust.id!,
+          customerName: cust.nickname || cust.fullName,
+          month: nextMonth,
+          amount: cashAmt,
+          paidAmount: remainder,
+          status: 'partial',
+          paidDate: now.toISOString().split('T')[0],
+          notes: `תשלום מראש חלקי (₪${remainder})`,
+          createdAt: now.toISOString(),
+        });
+      }
+    }
+
+    const parts: string[] = [];
+    if (totalUsed > 0) parts.push(`₪${totalUsed.toLocaleString()} כיסו חובות קיימים`);
+    if (monthsToPayFull > 0) parts.push(`${monthsToPayFull} חודשים שולמו מראש`);
+    if (remainder > 0) parts.push(`₪${remainder.toLocaleString()} עודף לחודש הבא`);
+    toast.success(parts.join(' • ') || 'התשלום בוצע');
+
     setAdvanceDialog(false);
     setAdvanceCustomerId('');
     setAdvanceMonths(1);
+    setAdvanceTotalAmount(0);
     loadData();
   };
 
@@ -390,7 +472,7 @@ export default function DebtsView() {
         <DialogContent onPointerDownOutside={e => e.preventDefault()}>
           <DialogHeader>
             <DialogTitle>תשלום מראש</DialogTitle>
-            <DialogDescription>שלם עבור חודשים עתידיים</DialogDescription>
+            <DialogDescription>שלם סכום חופשי או לפי חודשים — המערכת תחשב אוטומטית</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
@@ -398,33 +480,100 @@ export default function DebtsView() {
               <Select value={advanceCustomerId} onValueChange={v => {
                 setAdvanceCustomerId(v);
                 const c = cashCustomers.find(c => c.id === Number(v));
-                if (c) setAdvanceAmount(c.paymentMethod === 'mixed' ? c.cashAmount : c.monthlyAmount);
+                if (c) {
+                  const amt = c.paymentMethod === 'mixed' ? c.cashAmount : c.monthlyAmount;
+                  setAdvanceAmount(amt);
+                  if (advanceMode === 'months') setAdvanceTotalAmount(amt * advanceMonths);
+                }
               }}>
                 <SelectTrigger><SelectValue placeholder="בחר לקוח" /></SelectTrigger>
                 <SelectContent>
                   {cashCustomers.map(c => (
                     <SelectItem key={c.id} value={String(c.id)}>
-                      {c.nickname || c.fullName}
+                      {c.nickname || c.fullName} (₪{(c.paymentMethod === 'mixed' ? c.cashAmount : c.monthlyAmount).toLocaleString()}/חודש)
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1.5">
-              <Label>מספר חודשים</Label>
-              <Input type="number" dir="ltr" min={1} max={12} value={advanceMonths} onChange={e => setAdvanceMonths(Number(e.target.value) || 1)} />
+
+            {/* Mode Toggle */}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setAdvanceMode('amount')}
+                className={`p-2.5 rounded-lg border-2 text-sm font-medium transition-all ${
+                  advanceMode === 'amount'
+                    ? 'border-primary bg-primary/10 text-primary'
+                    : 'border-border text-muted-foreground hover:border-muted-foreground/30'
+                }`}
+              >
+                💰 לפי סכום
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdvanceMode('months')}
+                className={`p-2.5 rounded-lg border-2 text-sm font-medium transition-all ${
+                  advanceMode === 'months'
+                    ? 'border-primary bg-primary/10 text-primary'
+                    : 'border-border text-muted-foreground hover:border-muted-foreground/30'
+                }`}
+              >
+                📅 לפי חודשים
+              </button>
             </div>
-            {advanceCustomerId && (
-              <p className="text-sm text-muted-foreground">
-                סה"כ: ₪{(advanceAmount * advanceMonths).toLocaleString()}
-              </p>
+
+            {advanceMode === 'amount' ? (
+              <div className="space-y-1.5">
+                <Label>סכום ששולם (₪)</Label>
+                <Input
+                  type="number"
+                  dir="ltr"
+                  value={advanceTotalAmount || ''}
+                  onChange={e => setAdvanceTotalAmount(Number(e.target.value) || 0)}
+                  placeholder="למשל 1000"
+                />
+                {advanceCustomerId && advanceAmount > 0 && advanceTotalAmount > 0 && (
+                  <div className="text-sm bg-muted/50 rounded-lg p-3 space-y-1 mt-2">
+                    {(() => {
+                      const custDebtsUnpaid = debts.filter(d => d.customerId === Number(advanceCustomerId) && (d.status === 'unpaid' || d.status === 'partial'));
+                      const existingDebt = custDebtsUnpaid.reduce((s, d) => s + (d.amount - d.paidAmount), 0);
+                      const afterDebt = Math.max(0, advanceTotalAmount - existingDebt);
+                      const fullMonths = Math.floor(afterDebt / advanceAmount);
+                      const rem = afterDebt - (fullMonths * advanceAmount);
+                      return (
+                        <>
+                          {existingDebt > 0 && <p>🔴 כיסוי חוב קיים: <span className="font-semibold">₪{Math.min(existingDebt, advanceTotalAmount).toLocaleString()}</span></p>}
+                          {fullMonths > 0 && <p>✅ חודשים מראש: <span className="font-semibold">{fullMonths}</span></p>}
+                          {rem > 0 && <p>🟡 עודף לחודש הבא: <span className="font-semibold">₪{rem.toLocaleString()}</span></p>}
+                          <p className="text-xs text-muted-foreground pt-1">סכום חודשי: ₪{advanceAmount.toLocaleString()}</p>
+                        </>
+                      );
+                    })()}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <Label>מספר חודשים</Label>
+                <Input type="number" dir="ltr" min={1} max={24} value={advanceMonths} onChange={e => {
+                  const m = Number(e.target.value) || 1;
+                  setAdvanceMonths(m);
+                  setAdvanceTotalAmount(advanceAmount * m);
+                }} />
+                {advanceCustomerId && advanceAmount > 0 && (
+                  <p className="text-sm text-muted-foreground mt-1">
+                    סה"כ: <span className="font-semibold">₪{(advanceAmount * advanceMonths).toLocaleString()}</span>
+                  </p>
+                )}
+              </div>
             )}
           </div>
           <div className="flex justify-end gap-3">
-            <Button variant="secondary" onClick={() => setAdvanceDialog(false)}>ביטול</Button>
-            <Button onClick={handleAdvancePayment} disabled={!advanceCustomerId}>
+            <Button type="button" variant="secondary" onClick={() => setAdvanceDialog(false)}>ביטול</Button>
+            <Button type="button" onClick={handleAdvancePayment} disabled={!advanceCustomerId || (advanceMode === 'amount' && advanceTotalAmount <= 0)}>
               <Check className="h-4 w-4 ml-1" />
-              שלם מראש
+              בצע תשלום
             </Button>
           </div>
         </DialogContent>
