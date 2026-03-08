@@ -389,6 +389,14 @@ export default function DebtsView() {
           <Calendar className="h-4 w-4 ml-1" />
           תשלום מראש
         </Button>
+        <Button variant="outline" onClick={() => setExtraChargeDialog(true)}>
+          <PlusCircle className="h-4 w-4 ml-1" />
+          חיוב נוסף
+        </Button>
+        <Button variant="outline" onClick={() => setCashOverrideDialog(true)}>
+          <RefreshCw className="h-4 w-4 ml-1" />
+          תשלום מזומן במקום בנק
+        </Button>
       </div>
 
       {/* Top Debtors */}
