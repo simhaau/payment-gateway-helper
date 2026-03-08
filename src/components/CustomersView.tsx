@@ -268,6 +268,7 @@ export default function CustomersView() {
                   <TableCell><Badge variant={STATUS_MAP[c.status]?.variant || 'secondary'}>{STATUS_MAP[c.status]?.label || c.status}</Badge></TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
+                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setViewingCustomer(c)} title="הצג פרטים"><Eye className="h-3.5 w-3.5" /></Button>
                       <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEditCustomer(c)}><Edit className="h-3.5 w-3.5" /></Button>
                       <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleDuplicate(c)}><Copy className="h-3.5 w-3.5" /></Button>
                       <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => setDeleteId(c.id!)}><Trash2 className="h-3.5 w-3.5" /></Button>
