@@ -93,13 +93,34 @@ export default function SettingsView() {
         </CardContent>
       </Card>
 
-      <div className="flex gap-3">
+      <div className="flex gap-3 flex-wrap">
         <Button onClick={handleSave} className="gap-2">
           <Save className="h-4 w-4" />
           שמור הגדרות
         </Button>
         <Button variant="secondary" onClick={handleExportData}>
           ייצוא כל הנתונים (גיבוי)
+        </Button>
+        <Button variant="secondary" className="gap-2" onClick={() => {
+          const input = document.createElement('input');
+          input.type = 'file';
+          input.accept = '.json';
+          input.onchange = async (e) => {
+            const file = (e.target as HTMLInputElement).files?.[0];
+            if (!file) return;
+            try {
+              const text = await file.text();
+              await importData(text);
+              toast.success('הנתונים יובאו בהצלחה! רענן את הדף.');
+              window.location.reload();
+            } catch {
+              toast.error('שגיאה בייבוא הקובץ');
+            }
+          };
+          input.click();
+        }}>
+          <Upload className="h-4 w-4" />
+          ייבוא נתונים מגיבוי
         </Button>
       </div>
     </div>
