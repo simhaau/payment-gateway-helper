@@ -164,7 +164,7 @@ export async function getCustomer(id: number): Promise<Customer | undefined> {
 
 export async function addCustomer(c: Omit<Customer, 'id'>): Promise<number> {
   const store = await txStore('customers', 'readwrite');
-  const id = await reqToPromise(store.add(c)) as Promise<number>;
+  const id = (await reqToPromise(store.add(c))) as number;
   scheduleBackup();
   return id;
 }
