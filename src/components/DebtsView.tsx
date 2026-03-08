@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Search, Plus, Check, AlertCircle, Banknote, TrendingDown, CreditCard, Calendar } from 'lucide-react';
+import { Search, Plus, Check, AlertCircle, Banknote, TrendingDown, CreditCard, Calendar, Trash2, PlusCircle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -7,8 +7,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
-import { getAllCustomers, getAllDebts, addDebt, updateDebt } from '@/lib/db';
+import { Textarea } from '@/components/ui/textarea';
+import { getAllCustomers, getAllDebts, addDebt, updateDebt, deleteDebt } from '@/lib/db';
 import type { Customer, DebtRecord } from '@/lib/types';
 import { toast } from 'sonner';
 
@@ -30,6 +32,19 @@ export default function DebtsView() {
   const [advanceTotalAmount, setAdvanceTotalAmount] = useState(0);
   const [advanceMonths, setAdvanceMonths] = useState(1);
   const [advanceAmount, setAdvanceAmount] = useState(0);
+  const [deleteTarget, setDeleteTarget] = useState<DebtRecord | null>(null);
+  // Extra charge dialog
+  const [extraChargeDialog, setExtraChargeDialog] = useState(false);
+  const [extraChargeCustomerId, setExtraChargeCustomerId] = useState('');
+  const [extraChargeAmount, setExtraChargeAmount] = useState(0);
+  const [extraChargeNotes, setExtraChargeNotes] = useState('');
+  // Cash override dialog
+  const [cashOverrideDialog, setCashOverrideDialog] = useState(false);
+  const [cashOverrideCustomerId, setCashOverrideCustomerId] = useState('');
+  const [cashOverrideMonth, setCashOverrideMonth] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  });
 
   const loadData = () => {
     Promise.all([getAllCustomers(), getAllDebts()])
@@ -217,6 +232,77 @@ export default function DebtsView() {
     loadData();
   };
 
+  const handleDeleteDebt = async () => {
+    if (!deleteTarget?.id) return;
+    await deleteDebt(deleteTarget.id);
+    toast.success('החיוב נמחק');
+    setDeleteTarget(null);
+    loadData();
+  };
+
+  const handleExtraCharge = async () => {
+    if (!extraChargeCustomerId || extraChargeAmount <= 0) return;
+    const cust = customers.find(c => c.id === Number(extraChargeCustomerId));
+    if (!cust) return;
+    const now = new Date();
+    const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    await addDebt({
+      customerId: cust.id!,
+      customerName: cust.nickname || cust.fullName,
+      month,
+      amount: extraChargeAmount,
+      paidAmount: 0,
+      status: 'unpaid',
+      paidDate: '',
+      notes: extraChargeNotes || 'חיוב נוסף',
+      createdAt: now.toISOString(),
+    });
+    toast.success(`חיוב נוסף של ₪${extraChargeAmount.toLocaleString()} נוצר ל${cust.nickname || cust.fullName}`);
+    setExtraChargeDialog(false);
+    setExtraChargeCustomerId('');
+    setExtraChargeAmount(0);
+    setExtraChargeNotes('');
+    loadData();
+  };
+
+  const handleCashOverride = async () => {
+    if (!cashOverrideCustomerId) return;
+    const cust = customers.find(c => c.id === Number(cashOverrideCustomerId));
+    if (!cust) return;
+    if (cust.paymentMethod !== 'bank' && cust.paymentMethod !== 'mixed') {
+      toast.error('לקוח זה כבר משלם במזומן');
+      return;
+    }
+    const amount = cust.paymentMethod === 'mixed' ? cust.bankAmount : cust.monthlyAmount;
+    if (amount <= 0) { toast.error('לא הוגדר סכום חודשי'); return; }
+    const existing = debts.find(d => d.customerId === cust.id && d.month === cashOverrideMonth);
+    if (existing) {
+      toast.error('כבר קיים חיוב לחודש זה ללקוח');
+      return;
+    }
+    const now = new Date();
+    await addDebt({
+      customerId: cust.id!,
+      customerName: cust.nickname || cust.fullName,
+      month: cashOverrideMonth,
+      amount,
+      paidAmount: 0,
+      status: 'unpaid',
+      paidDate: '',
+      notes: 'תשלום במזומן במקום בנק',
+      createdAt: now.toISOString(),
+    });
+    toast.success(`חיוב מזומן של ₪${amount.toLocaleString()} נוצר ל${cust.nickname || cust.fullName}`);
+    setCashOverrideDialog(false);
+    setCashOverrideCustomerId('');
+    loadData();
+  };
+
+  const bankCustomers = useMemo(() =>
+    customers.filter(c => c.status === 'active' && (c.paymentMethod === 'bank' || c.paymentMethod === 'mixed')),
+    [customers]
+  );
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'paid': return <Badge className="bg-success/15 text-success border-success/30">שולם</Badge>;
@@ -303,6 +389,14 @@ export default function DebtsView() {
           <Calendar className="h-4 w-4 ml-1" />
           תשלום מראש
         </Button>
+        <Button variant="outline" onClick={() => setExtraChargeDialog(true)}>
+          <PlusCircle className="h-4 w-4 ml-1" />
+          חיוב נוסף
+        </Button>
+        <Button variant="outline" onClick={() => setCashOverrideDialog(true)}>
+          <RefreshCw className="h-4 w-4 ml-1" />
+          תשלום מזומן במקום בנק
+        </Button>
       </div>
 
       {/* Top Debtors */}
@@ -361,7 +455,8 @@ export default function DebtsView() {
               <TableHead>שולם</TableHead>
               <TableHead>יתרה</TableHead>
               <TableHead>סטטוס</TableHead>
-              <TableHead className="w-24">פעולות</TableHead>
+              <TableHead>הערות</TableHead>
+              <TableHead className="w-32">פעולות</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -375,9 +470,10 @@ export default function DebtsView() {
                   ₪{(d.amount - d.paidAmount).toLocaleString()}
                 </TableCell>
                 <TableCell>{getStatusBadge(d.status)}</TableCell>
+                <TableCell className="text-xs text-muted-foreground max-w-[120px] truncate" title={d.notes}>{d.notes}</TableCell>
                 <TableCell>
-                  {d.status !== 'paid' && d.status !== 'advance' && (
-                    <div className="flex gap-1">
+                  <div className="flex gap-1">
+                    {d.status !== 'paid' && d.status !== 'advance' && (
                       <Button
                         size="sm"
                         variant="outline"
@@ -387,14 +483,22 @@ export default function DebtsView() {
                         <Banknote className="h-3 w-3 ml-1" />
                         שלם
                       </Button>
-                    </div>
-                  )}
+                    )}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                      onClick={() => setDeleteTarget(d)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             ))}
             {filteredDebts.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
                   אין חובות להצגה
                 </TableCell>
               </TableRow>
@@ -574,6 +678,108 @@ export default function DebtsView() {
             <Button type="button" onClick={handleAdvancePayment} disabled={!advanceCustomerId || (advanceMode === 'amount' && advanceTotalAmount <= 0)}>
               <Check className="h-4 w-4 ml-1" />
               בצע תשלום
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>מחיקת חיוב</AlertDialogTitle>
+            <AlertDialogDescription>
+              האם למחוק את החיוב של {deleteTarget?.customerName} לחודש {deleteTarget?.month} (₪{deleteTarget?.amount.toLocaleString()})?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>ביטול</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteDebt} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">מחק</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Extra Charge Dialog */}
+      <Dialog open={extraChargeDialog} onOpenChange={setExtraChargeDialog}>
+        <DialogContent onPointerDownOutside={e => e.preventDefault()}>
+          <DialogHeader>
+            <DialogTitle>חיוב נוסף</DialogTitle>
+            <DialogDescription>הוסף חיוב חד-פעמי לחודש הנוכחי — ישולם במזומן</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label>לקוח</Label>
+              <Select value={extraChargeCustomerId} onValueChange={setExtraChargeCustomerId}>
+                <SelectTrigger><SelectValue placeholder="בחר לקוח" /></SelectTrigger>
+                <SelectContent>
+                  {customers.filter(c => c.status === 'active').map(c => (
+                    <SelectItem key={c.id} value={String(c.id)}>
+                      {c.nickname || c.fullName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>סכום (₪)</Label>
+              <Input type="number" dir="ltr" value={extraChargeAmount || ''} onChange={e => setExtraChargeAmount(Number(e.target.value) || 0)} placeholder="למשל 200" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>הערה</Label>
+              <Textarea value={extraChargeNotes} onChange={e => setExtraChargeNotes(e.target.value)} placeholder="סיבת החיוב..." rows={2} />
+            </div>
+          </div>
+          <div className="flex justify-end gap-3">
+            <Button variant="secondary" onClick={() => setExtraChargeDialog(false)}>ביטול</Button>
+            <Button onClick={handleExtraCharge} disabled={!extraChargeCustomerId || extraChargeAmount <= 0}>
+              <PlusCircle className="h-4 w-4 ml-1" />
+              צור חיוב
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cash Override Dialog */}
+      <Dialog open={cashOverrideDialog} onOpenChange={setCashOverrideDialog}>
+        <DialogContent onPointerDownOutside={e => e.preventDefault()}>
+          <DialogHeader>
+            <DialogTitle>תשלום מזומן במקום בנק</DialogTitle>
+            <DialogDescription>צור חיוב מזומן ללקוח בנק לחודש ספציפי — במקום גבייה דרך הבנק</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label>לקוח (בנק/משולב)</Label>
+              <Select value={cashOverrideCustomerId} onValueChange={setCashOverrideCustomerId}>
+                <SelectTrigger><SelectValue placeholder="בחר לקוח" /></SelectTrigger>
+                <SelectContent>
+                  {bankCustomers.map(c => (
+                    <SelectItem key={c.id} value={String(c.id)}>
+                      {c.nickname || c.fullName} (₪{(c.paymentMethod === 'mixed' ? c.bankAmount : c.monthlyAmount).toLocaleString()}/חודש)
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>חודש</Label>
+              <Input type="month" dir="ltr" value={cashOverrideMonth} onChange={e => setCashOverrideMonth(e.target.value)} />
+            </div>
+            {cashOverrideCustomerId && (
+              <div className="text-sm bg-muted/50 rounded-lg p-3">
+                {(() => {
+                  const c = customers.find(c => c.id === Number(cashOverrideCustomerId));
+                  if (!c) return null;
+                  const amt = c.paymentMethod === 'mixed' ? c.bankAmount : c.monthlyAmount;
+                  return <p>הסכום שייווצר כחיוב מזומן: <span className="font-semibold">₪{amt.toLocaleString()}</span></p>;
+                })()}
+              </div>
+            )}
+          </div>
+          <div className="flex justify-end gap-3">
+            <Button variant="secondary" onClick={() => setCashOverrideDialog(false)}>ביטול</Button>
+            <Button onClick={handleCashOverride} disabled={!cashOverrideCustomerId}>
+              <RefreshCw className="h-4 w-4 ml-1" />
+              צור חיוב מזומן
             </Button>
           </div>
         </DialogContent>
