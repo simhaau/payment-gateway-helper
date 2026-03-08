@@ -117,10 +117,11 @@ export function generateMasavFile(batch: BillingBatch, settings: Settings): stri
   totals += paymentDate;                             // Pos 12-17 (6)  Date of payment
   totals += '0';                                     // Pos 18    (1)  Filler
   totals += '001';                                   // Pos 19-21 (3)  Serial number
-  totals += amountToField(totalAmount, 15);          // Pos 22-36 (15) Sum of movements
-  totals += padLeft('', 15);                         // Pos 37-51 (15) Filler (zeros)
-  totals += padLeft(String(validTx.length), 7);      // Pos 52-58 (7)  Number of movements
-  totals += padLeft('', 70);                         // Pos 59-128(70) Filler (zeros)
+  totals += padLeft('', 15);                         // Pos 22-36 (15) Filler (zeros) - for debit files, filler comes first
+  totals += amountToField(totalAmount, 15);          // Pos 37-51 (15) Sum of movements (13 shekel + 2 agorot)
+  totals += padLeft('', 7);                          // Pos 52-58 (7)  Filler (zeros)
+  totals += padLeft(String(validTx.length), 7);      // Pos 59-65 (7)  Number of movements
+  totals += padRight('', 63);                        // Pos 66-128(63) Filler (spaces)
   ensureRecordLength(totals, 'totals');
   lines.push(totals);
 
