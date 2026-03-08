@@ -263,10 +263,25 @@ export async function saveSettings(s: Settings): Promise<void> {
   scheduleBackup();
 }
 
+// ACTIVITIES
+export async function getAllActivities(): Promise<ActivityLog[]> {
+  const store = await txStore('activities', 'readonly');
+  return reqToPromise(store.getAll());
+}
+export async function addActivity(a: Omit<ActivityLog, 'id'>): Promise<number> {
+  const store = await txStore('activities', 'readwrite');
+  const id = (await reqToPromise(store.add(a))) as number;
+  return id;
+}
+export async function deleteActivity(id: number): Promise<void> {
+  const store = await txStore('activities', 'readwrite');
+  await reqToPromise(store.delete(id));
+}
+
 // EXPORT DATA
 export async function exportAllData(): Promise<string> {
-  const [customers, groups, batches, settings, debts] = await Promise.all([
-    getAllCustomers(), getAllGroups(), getAllBatches(), getSettings(), getAllDebts()
+  const [customers, groups, batches, settings, debts, activities] = await Promise.all([
+    getAllCustomers(), getAllGroups(), getAllBatches(), getSettings(), getAllDebts(), getAllActivities()
   ]);
-  return JSON.stringify({ customers, groups, batches, settings, debts }, null, 2);
+  return JSON.stringify({ customers, groups, batches, settings, debts, activities }, null, 2);
 }
