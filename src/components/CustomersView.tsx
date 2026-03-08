@@ -7,10 +7,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { getAllCustomers, deleteCustomer, addCustomer, getAllGroups, bulkUpdateCustomers } from '@/lib/db';
+import { getAllCustomers, deleteCustomer, addCustomer, getAllGroups, bulkUpdateCustomers, getSettings } from '@/lib/db';
 import { parseCSVCustomers } from '@/lib/csvImport';
+import { getCustomerMonthlyAmount } from '@/lib/billing';
 import CustomerDialog from './CustomerDialog';
-import type { Customer, Group } from '@/lib/types';
+import type { Customer, Group, Settings } from '@/lib/types';
 import { toast } from 'sonner';
 
 const PAGE_SIZE = 50;
