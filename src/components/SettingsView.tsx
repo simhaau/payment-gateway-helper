@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Save, Building2 } from 'lucide-react';
+import { Save, Building2, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { getSettings, saveSettings, exportAllData } from '@/lib/db';
+import { getSettings, saveSettings, exportAllData, importData } from '@/lib/db';
 import type { Settings } from '@/lib/types';
 import { DEFAULT_SETTINGS } from '@/lib/types';
 import { toast } from 'sonner';
@@ -93,13 +93,34 @@ export default function SettingsView() {
         </CardContent>
       </Card>
 
-      <div className="flex gap-3">
+      <div className="flex gap-3 flex-wrap">
         <Button onClick={handleSave} className="gap-2">
           <Save className="h-4 w-4" />
           שמור הגדרות
         </Button>
         <Button variant="secondary" onClick={handleExportData}>
           ייצוא כל הנתונים (גיבוי)
+        </Button>
+        <Button variant="secondary" className="gap-2" onClick={() => {
+          const input = document.createElement('input');
+          input.type = 'file';
+          input.accept = '.json';
+          input.onchange = async (e) => {
+            const file = (e.target as HTMLInputElement).files?.[0];
+            if (!file) return;
+            try {
+              const text = await file.text();
+              await importData(text);
+              toast.success('הנתונים יובאו בהצלחה! רענן את הדף.');
+              window.location.reload();
+            } catch {
+              toast.error('שגיאה בייבוא הקובץ');
+            }
+          };
+          input.click();
+        }}>
+          <Upload className="h-4 w-4" />
+          ייבוא נתונים מגיבוי
         </Button>
       </div>
     </div>
