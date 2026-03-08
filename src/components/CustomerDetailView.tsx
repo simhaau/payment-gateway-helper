@@ -164,10 +164,21 @@ export default function CustomerDetailView({ customer, onBack }: Props) {
         </Card>
         <Card className="glass-card">
           <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">חודש נוכחי</p>
-            <p className={`text-xl font-bold mt-1 ${currentMonthBalance > 0 ? 'text-destructive' : 'text-success'}`}>
-              {currentMonthBalance > 0 ? `₪${currentMonthBalance.toLocaleString()}` : currentMonthPaid > 0 ? 'שולם ✓' : '—'}
+            <p className="text-xs text-muted-foreground">חיוב כולל החודש</p>
+            <p className={`text-xl font-bold mt-1 ${currentMonthBalance > 0 ? 'text-destructive' : currentMonthTotal > 0 ? 'text-success' : ''}`}>
+              {currentMonthTotal > 0 ? `₪${currentMonthTotal.toLocaleString()}` : `₪${monthlyAmount.toLocaleString()}`}
             </p>
+            {extrasTotal > 0 && (
+              <p className="text-xs text-muted-foreground mt-0.5">
+                בסיס: ₪{baseTotal.toLocaleString()} + נוספים: ₪{extrasTotal.toLocaleString()}
+              </p>
+            )}
+            {currentMonthBalance <= 0 && currentMonthPaid > 0 && (
+              <p className="text-xs text-success mt-0.5">שולם ✓</p>
+            )}
+            {currentMonthBalance > 0 && (
+              <p className="text-xs text-destructive mt-0.5">יתרה: ₪{currentMonthBalance.toLocaleString()}</p>
+            )}
           </CardContent>
         </Card>
         <Card className="glass-card">
