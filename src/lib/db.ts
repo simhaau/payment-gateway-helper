@@ -201,7 +201,7 @@ export async function getAllGroups(): Promise<Group[]> {
 
 export async function addGroup(g: Omit<Group, 'id'>): Promise<number> {
   const store = await txStore('groups', 'readwrite');
-  const id = await reqToPromise(store.add(g)) as Promise<number>;
+  const id = (await reqToPromise(store.add(g))) as number;
   scheduleBackup();
   return id;
 }
