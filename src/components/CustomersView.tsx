@@ -33,6 +33,7 @@ export default function CustomersView() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
+  const [debts, setDebts] = useState<DebtRecord[]>([]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [groupFilter, setGroupFilter] = useState('all');
