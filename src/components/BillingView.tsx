@@ -74,7 +74,8 @@ export default function BillingView() {
       const targets = getTargetCustomers();
       if (targets.length === 0) { toast.error('אין לקוחות לגבייה'); return; }
       const extras = getExtraDebts();
-      const batch = createBillingBatch(targets, valueDate, extras, billingMonths);
+      const pricePerAmpere = settings?.pricePerAmpere || 0;
+      const batch = createBillingBatch(targets, valueDate, pricePerAmpere, extras, billingMonths);
       await addBatch(batch);
 
       // Auto-settle: create/update debt records as paid for each included transaction
