@@ -7,12 +7,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { getAllCustomers, deleteCustomer, addCustomer, getAllGroups, bulkUpdateCustomers, getSettings } from '@/lib/db';
+import { getAllCustomers, deleteCustomer, addCustomer, getAllGroups, bulkUpdateCustomers, getSettings, getAllDebts } from '@/lib/db';
 import { parseCSVCustomers } from '@/lib/csvImport';
 import { getCustomerMonthlyAmount } from '@/lib/billing';
 import CustomerDialog from './CustomerDialog';
 import CustomerDetailView from './CustomerDetailView';
-import type { Customer, Group, Settings } from '@/lib/types';
+import type { Customer, Group, Settings, DebtRecord } from '@/lib/types';
 import { toast } from 'sonner';
 
 const PAGE_SIZE = 50;
@@ -33,6 +33,7 @@ export default function CustomersView() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
+  const [debts, setDebts] = useState<DebtRecord[]>([]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [groupFilter, setGroupFilter] = useState('all');
@@ -47,8 +48,20 @@ export default function CustomersView() {
   const [viewingCustomer, setViewingCustomer] = useState<Customer | null>(null);
 
   const loadData = () => {
-    Promise.all([getAllCustomers(), getAllGroups(), getSettings()])
-      .then(([c, g, s]) => { setCustomers(c); setGroups(g); setSettings(s); });
+    Promise.all([getAllCustomers(), getAllGroups(), getSettings(), getAllDebts()])
+      .then(([c, g, s, d]) => { setCustomers(c); setGroups(g); setSettings(s); setDebts(d); });
+  };
+
+  const currentMonth = useMemo(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  }, []);
+
+  const getCustomerTotalThisMonth = (customerId: number) => {
+    const customerDebts = debts.filter(d => d.customerId === customerId && d.month === currentMonth);
+    const totalCharged = customerDebts.reduce((s, d) => s + d.amount, 0);
+    const totalPaid = customerDebts.reduce((s, d) => s + d.paidAmount, 0);
+    return { totalCharged, totalPaid, balance: totalCharged - totalPaid, debts: customerDebts };
   };
 
   useEffect(() => { loadData(); }, []);
@@ -221,6 +234,7 @@ export default function CustomersView() {
               <TableHead>בנק/סניף/חשבון</TableHead>
               <TableHead>אמפרים</TableHead>
               <TableHead>סכום חודשי</TableHead>
+              <TableHead>חיוב החודש</TableHead>
               <TableHead>קבוצה</TableHead>
               <TableHead>סטטוס</TableHead>
               <TableHead className="w-24">פעולות</TableHead>
@@ -264,6 +278,25 @@ export default function CustomersView() {
                       </span>
                     )}
                   </TableCell>
+                  <TableCell>
+                    {(() => {
+                      const monthData = getCustomerTotalThisMonth(c.id!);
+                      if (monthData.totalCharged === 0) return <span className="text-muted-foreground">—</span>;
+                      return (
+                        <div>
+                          <span className={`font-medium ${monthData.balance > 0 ? 'text-destructive' : 'text-success'}`}>
+                            ₪{monthData.totalCharged.toLocaleString()}
+                          </span>
+                          {monthData.balance <= 0 && monthData.totalPaid > 0 && (
+                            <span className="text-xs text-success block">שולם ✓</span>
+                          )}
+                          {monthData.balance > 0 && (
+                            <span className="text-xs text-destructive block">יתרה: ₪{monthData.balance.toLocaleString()}</span>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </TableCell>
                   <TableCell>{c.groupId ? <Badge variant="outline">{groupName(c.groupId)}</Badge> : '-'}</TableCell>
                   <TableCell><Badge variant={STATUS_MAP[c.status]?.variant || 'secondary'}>{STATUS_MAP[c.status]?.label || c.status}</Badge></TableCell>
                   <TableCell>
@@ -279,7 +312,7 @@ export default function CustomersView() {
             })}
             {paged.length === 0 && (
               <TableRow>
-                <TableCell colSpan={10} className="text-center py-12 text-muted-foreground">
+                <TableCell colSpan={12} className="text-center py-12 text-muted-foreground">
                   {customers.length === 0 ? 'אין לקוחות עדיין. הוסף לקוח חדש כדי להתחיל.' : 'לא נמצאו תוצאות'}
                 </TableCell>
               </TableRow>
