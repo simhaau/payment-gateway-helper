@@ -7,6 +7,7 @@ import GroupsView from '@/components/GroupsView';
 import BillingView from '@/components/BillingView';
 import DebtsView from '@/components/DebtsView';
 import SettingsView from '@/components/SettingsView';
+import ActivityLogView from '@/components/ActivityLogView';
 import CommandPalette from '@/components/CommandPalette';
 import ThemeToggle from '@/components/ThemeToggle';
 
