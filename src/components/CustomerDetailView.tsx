@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { ArrowRight, User, CreditCard, Banknote, Calendar, TrendingUp, TrendingDown, AlertCircle, CheckCircle2, Clock, Zap, Building2, Shuffle, FileText, Plus, Trash2, EyeOff, Eye, Pencil } from 'lucide-react';
+import { ArrowRight, User, CreditCard, Banknote, Calendar, TrendingUp, TrendingDown, AlertCircle, CheckCircle2, Clock, Zap, Building2, Shuffle, FileText, Plus, Trash2, EyeOff, Eye, Pencil, Download, FileSpreadsheet, CalendarClock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
