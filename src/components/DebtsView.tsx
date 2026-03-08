@@ -263,36 +263,26 @@ export default function DebtsView() {
     loadData();
   };
 
-  const handleCashOverride = async () => {
-    if (!cashOverrideCustomerId) return;
-    const cust = customers.find(c => c.id === Number(cashOverrideCustomerId));
-    if (!cust) return;
-    if (cust.paymentMethod !== 'bank' && cust.paymentMethod !== 'mixed') {
-      toast.error('לקוח זה כבר משלם במזומן');
-      return;
-    }
-    const amount = cust.paymentMethod === 'mixed' ? cust.bankAmount : cust.monthlyAmount;
-    if (amount <= 0) { toast.error('לא הוגדר סכום חודשי'); return; }
-    const existing = debts.find(d => d.customerId === cust.id && d.month === cashOverrideMonth);
-    if (existing) {
-      toast.error('כבר קיים חיוב לחודש זה ללקוח');
-      return;
-    }
-    const now = new Date();
-    await addDebt({
-      customerId: cust.id!,
-      customerName: cust.nickname || cust.fullName,
-      month: cashOverrideMonth,
-      amount,
-      paidAmount: 0,
-      status: 'unpaid',
-      paidDate: '',
-      notes: 'תשלום במזומן במקום בנק',
-      createdAt: now.toISOString(),
+  const handleCashPay = async () => {
+    if (!cashPayCustomerId || !cashPayDebtId || cashPayAmount <= 0) return;
+    const debt = debts.find(d => d.id === Number(cashPayDebtId));
+    if (!debt) return;
+    const remaining = debt.amount - debt.paidAmount;
+    const actualPay = Math.min(cashPayAmount, remaining);
+    const newPaid = debt.paidAmount + actualPay;
+    const newStatus = newPaid >= debt.amount ? 'paid' : 'partial';
+    await updateDebt({
+      ...debt,
+      paidAmount: newPaid,
+      status: newStatus,
+      paidDate: newStatus === 'paid' ? new Date().toISOString().split('T')[0] : debt.paidDate,
+      notes: debt.notes ? `${debt.notes} | שולם במזומן` : 'שולם במזומן',
     });
-    toast.success(`חיוב מזומן של ₪${amount.toLocaleString()} נוצר ל${cust.nickname || cust.fullName}`);
-    setCashOverrideDialog(false);
-    setCashOverrideCustomerId('');
+    toast.success(newStatus === 'paid' ? `החוב סולק במזומן (₪${actualPay.toLocaleString()})` : `שולם ₪${actualPay.toLocaleString()} במזומן`);
+    setCashPayDialog(false);
+    setCashPayCustomerId('');
+    setCashPayDebtId('');
+    setCashPayAmount(0);
     loadData();
   };
 
