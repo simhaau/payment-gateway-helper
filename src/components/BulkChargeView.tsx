@@ -96,19 +96,25 @@ export default function BulkChargeView() {
         : `חיוב גורף${notes ? ': ' + notes : ''}`;
 
       let count = 0;
-      for (const c of targetCustomers) {
-        await addDebt({
-          customerId: c.id!,
-          customerName: c.fullName,
-          month,
-          amount: chargeAmount,
-          paidAmount: 0,
-          status: 'unpaid',
-          paidDate: '',
-          notes: noteText,
-          createdAt: now,
-        });
-        count++;
+      // Create debts for each month in the spread
+      for (let m = 0; m < spreadMonths; m++) {
+        const [y, mo] = month.split('-').map(Number);
+        const targetDate = new Date(y, mo - 1 + m);
+        const targetMonth = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}`;
+        for (const c of targetCustomers) {
+          await addDebt({
+            customerId: c.id!,
+            customerName: c.fullName,
+            month: targetMonth,
+            amount: chargeAmount,
+            paidAmount: 0,
+            status: 'unpaid',
+            paidDate: '',
+            notes: spreadMonths > 1 ? `${noteText} (${m + 1}/${spreadMonths})` : noteText,
+            createdAt: now,
+          });
+          count++;
+        }
       }
 
       await addActivity({
