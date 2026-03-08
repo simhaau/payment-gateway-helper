@@ -315,6 +315,39 @@ export default function DebtsView() {
     loadData();
   };
 
+  const handleMoneyCharge = async () => {
+    if (!moneyChargeCustomerId || moneyChargeAmount <= 0) return;
+    const cust = customers.find(c => c.id === Number(moneyChargeCustomerId));
+    if (!cust) return;
+    const now = new Date();
+    const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    await addDebt({
+      customerId: cust.id!,
+      customerName: cust.nickname || cust.fullName,
+      month,
+      amount: moneyChargeAmount,
+      paidAmount: 0,
+      status: 'unpaid',
+      paidDate: '',
+      notes: moneyChargeNotes || 'חיוב כספי נוסף',
+      createdAt: now.toISOString(),
+    });
+    await addActivity({
+      type: 'extra_charge',
+      description: `חיוב כספי נוסף: ₪${moneyChargeAmount.toLocaleString()} ל${cust.nickname || cust.fullName} (${moneyChargeNotes || 'חיוב נוסף'})`,
+      customerId: cust.id,
+      customerName: cust.nickname || cust.fullName,
+      amount: moneyChargeAmount,
+      createdAt: now.toISOString(),
+    });
+    toast.success(`חיוב של ₪${moneyChargeAmount.toLocaleString()} נוצר ל${cust.nickname || cust.fullName}`);
+    setMoneyChargeDialog(false);
+    setMoneyChargeCustomerId('');
+    setMoneyChargeAmount(0);
+    setMoneyChargeNotes('');
+    loadData();
+  };
+
   const handleCashPay = async () => {
     if (!cashPayCustomerId || !cashPayDebtId || cashPayAmount <= 0) return;
     const debt = debts.find(d => d.id === Number(cashPayDebtId));
