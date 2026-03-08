@@ -19,15 +19,16 @@ interface SettingsFieldProps {
 }
 
 function SettingsField({ label, field, value, onChange, dir, placeholder }: SettingsFieldProps) {
+  const isNumber = field === 'defaultBillingDay' || field === 'pricePerAmpere';
   return (
     <div className="space-y-1.5">
       <Label className="text-xs text-muted-foreground">{label}</Label>
       <Input
         value={String(value || '')}
-        onChange={e => onChange(field, field === 'defaultBillingDay' ? Number(e.target.value) : e.target.value)}
+        onChange={e => onChange(field, isNumber ? Number(e.target.value) : e.target.value)}
         dir={dir}
         placeholder={placeholder}
-        type={field === 'defaultBillingDay' ? 'number' : 'text'}
+        type={isNumber ? 'number' : 'text'}
       />
     </div>
   );
@@ -93,6 +94,18 @@ export default function SettingsView() {
         </CardContent>
       </Card>
 
+      <Card className="glass-card">
+        <CardHeader>
+          <CardTitle className="text-lg">תמחור</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <SettingsField label="מחיר לאמפר (₪)" field="pricePerAmpere" value={form.pricePerAmpere} onChange={set} dir="ltr" placeholder="10" />
+          <p className="text-xs text-muted-foreground mt-2">
+            הסכום החודשי לכל לקוח יחושב: כמות אמפרים × מחיר לאמפר
+          </p>
+        </CardContent>
+      </Card>
+
       <div className="flex gap-3 flex-wrap">
         <Button onClick={handleSave} className="gap-2">
           <Save className="h-4 w-4" />
@@ -126,4 +139,3 @@ export default function SettingsView() {
     </div>
   );
 }
-

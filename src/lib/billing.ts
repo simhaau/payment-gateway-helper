@@ -4,7 +4,7 @@ export function getCustomersDueForBilling(customers: Customer[], targetDate?: Da
   const now = targetDate || new Date();
   return customers.filter(c => {
     if (c.status !== 'active') return false;
-    if (!c.monthlyAmount || c.monthlyAmount <= 0) return false;
+    if ((!c.amperes || c.amperes <= 0) && (!c.monthlyAmount || c.monthlyAmount <= 0)) return false;
     const start = new Date(c.startDate);
     if (start > now) return false;
     if (c.endDate) {
@@ -15,9 +15,17 @@ export function getCustomersDueForBilling(customers: Customer[], targetDate?: Da
   });
 }
 
+export function getCustomerMonthlyAmount(c: Customer, pricePerAmpere: number): number {
+  if (c.amperes && c.amperes > 0 && pricePerAmpere > 0) {
+    return c.amperes * pricePerAmpere;
+  }
+  return c.monthlyAmount || 0;
+}
+
 export function createBillingBatch(
   customers: Customer[],
   valueDate: string,
+  pricePerAmpere: number,
   extraDebts?: DebtRecord[],
   months?: number
 ): BillingBatch {
@@ -28,9 +36,11 @@ export function createBillingBatch(
     if (!c.bankNumber) errors.push('חסר מספר בנק');
     if (!c.branchNumber) errors.push('חסר מספר סניף');
     if (!c.accountNumber) errors.push('חסר מספר חשבון');
-    if (!c.monthlyAmount || c.monthlyAmount <= 0) errors.push('סכום לא תקין');
+    
+    const monthlyAmt = getCustomerMonthlyAmount(c, pricePerAmpere);
+    if (monthlyAmt <= 0) errors.push('סכום לא תקין');
 
-    const baseAmount = (c.paymentMethod === 'mixed' ? (c.bankAmount || c.monthlyAmount) : c.monthlyAmount);
+    const baseAmount = (c.paymentMethod === 'mixed' ? (c.bankAmount || monthlyAmt) : monthlyAmt);
     
     // Add any extra debts (unpaid) for this customer
     const customerExtras = (extraDebts || []).filter(d => 
@@ -70,8 +80,8 @@ export function createBillingBatch(
   };
 }
 
-export function calculateExpectedMonthlyIncome(customers: Customer[]): number {
+export function calculateExpectedMonthlyIncome(customers: Customer[], pricePerAmpere: number): number {
   return customers
-    .filter(c => c.status === 'active' && c.monthlyAmount > 0)
-    .reduce((sum, c) => sum + c.monthlyAmount, 0);
+    .filter(c => c.status === 'active')
+    .reduce((sum, c) => sum + getCustomerMonthlyAmount(c, pricePerAmpere), 0);
 }
