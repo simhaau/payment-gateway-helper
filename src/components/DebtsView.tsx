@@ -109,15 +109,64 @@ export default function DebtsView() {
     if (!advanceCustomerId) return;
     const cust = customers.find(c => c.id === Number(advanceCustomerId));
     if (!cust) return;
+    const cashAmt = cust.paymentMethod === 'mixed' ? cust.cashAmount : cust.monthlyAmount;
+    if (cashAmt <= 0) { toast.error('לא הוגדר סכום חודשי'); return; }
+
     const now = new Date();
     const baseMonth = new Date(now.getFullYear(), now.getMonth());
 
-    for (let i = 0; i < advanceMonths; i++) {
+    let monthsToPayFull: number;
+    let remainder = 0;
+
+    if (advanceMode === 'amount') {
+      if (advanceTotalAmount <= 0) { toast.error('הכנס סכום'); return; }
+      monthsToPayFull = Math.floor(advanceTotalAmount / cashAmt);
+      remainder = advanceTotalAmount - (monthsToPayFull * cashAmt);
+    } else {
+      monthsToPayFull = advanceMonths;
+    }
+
+    // First settle any existing unpaid/partial debts with the money
+    let totalUsed = 0;
+    const existingUnpaid = debts
+      .filter(d => d.customerId === cust.id && (d.status === 'unpaid' || d.status === 'partial'))
+      .sort((a, b) => a.month.localeCompare(b.month));
+
+    if (advanceMode === 'amount') {
+      let budget = advanceTotalAmount;
+      for (const d of existingUnpaid) {
+        if (budget <= 0) break;
+        const owed = d.amount - d.paidAmount;
+        const pay = Math.min(owed, budget);
+        const newPaid = d.paidAmount + pay;
+        const newStatus = newPaid >= d.amount ? 'paid' : 'partial';
+        await updateDebt({ ...d, paidAmount: newPaid, status: newStatus, paidDate: newStatus === 'paid' ? now.toISOString().split('T')[0] : d.paidDate });
+        budget -= pay;
+        totalUsed += pay;
+      }
+      // Recalculate months from remaining budget
+      if (budget > 0) {
+        monthsToPayFull = Math.floor(budget / cashAmt);
+        remainder = budget - (monthsToPayFull * cashAmt);
+      } else {
+        monthsToPayFull = 0;
+        remainder = 0;
+      }
+    }
+
+    // Create advance records for future months
+    let created = 0;
+    for (let i = 0; i < monthsToPayFull; i++) {
       const m = new Date(baseMonth.getFullYear(), baseMonth.getMonth() + i + 1);
       const month = `${m.getFullYear()}-${String(m.getMonth() + 1).padStart(2, '0')}`;
       const existing = debts.find(d => d.customerId === cust.id && d.month === month);
-      if (existing) continue;
-      const cashAmt = cust.paymentMethod === 'mixed' ? cust.cashAmount : cust.monthlyAmount;
+      if (existing) {
+        // Pay off existing debt for this month
+        if (existing.status !== 'paid' && existing.status !== 'advance') {
+          await updateDebt({ ...existing, paidAmount: existing.amount, status: 'advance', paidDate: now.toISOString().split('T')[0], notes: 'תשלום מראש' });
+        }
+        continue;
+      }
       await addDebt({
         customerId: cust.id!,
         customerName: cust.nickname || cust.fullName,
@@ -125,15 +174,46 @@ export default function DebtsView() {
         amount: cashAmt,
         paidAmount: cashAmt,
         status: 'advance',
-        paidDate: new Date().toISOString().split('T')[0],
+        paidDate: now.toISOString().split('T')[0],
         notes: 'תשלום מראש',
-        createdAt: new Date().toISOString(),
+        createdAt: now.toISOString(),
       });
+      created++;
     }
-    toast.success(`${advanceMonths} חודשים שולמו מראש`);
+
+    // Handle remainder as partial payment for the next month
+    if (remainder > 0) {
+      const nextM = new Date(baseMonth.getFullYear(), baseMonth.getMonth() + monthsToPayFull + 1);
+      const nextMonth = `${nextM.getFullYear()}-${String(nextM.getMonth() + 1).padStart(2, '0')}`;
+      const existingNext = debts.find(d => d.customerId === cust.id && d.month === nextMonth);
+      if (existingNext) {
+        const newPaid = Math.min(existingNext.paidAmount + remainder, existingNext.amount);
+        await updateDebt({ ...existingNext, paidAmount: newPaid, status: newPaid >= existingNext.amount ? 'advance' : 'partial', paidDate: now.toISOString().split('T')[0] });
+      } else {
+        await addDebt({
+          customerId: cust.id!,
+          customerName: cust.nickname || cust.fullName,
+          month: nextMonth,
+          amount: cashAmt,
+          paidAmount: remainder,
+          status: 'partial',
+          paidDate: now.toISOString().split('T')[0],
+          notes: `תשלום מראש חלקי (₪${remainder})`,
+          createdAt: now.toISOString(),
+        });
+      }
+    }
+
+    const parts: string[] = [];
+    if (totalUsed > 0) parts.push(`₪${totalUsed.toLocaleString()} כיסו חובות קיימים`);
+    if (monthsToPayFull > 0) parts.push(`${monthsToPayFull} חודשים שולמו מראש`);
+    if (remainder > 0) parts.push(`₪${remainder.toLocaleString()} עודף לחודש הבא`);
+    toast.success(parts.join(' • ') || 'התשלום בוצע');
+
     setAdvanceDialog(false);
     setAdvanceCustomerId('');
     setAdvanceMonths(1);
+    setAdvanceTotalAmount(0);
     loadData();
   };
 
