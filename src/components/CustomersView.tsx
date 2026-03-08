@@ -11,6 +11,7 @@ import { getAllCustomers, deleteCustomer, addCustomer, getAllGroups, bulkUpdateC
 import { parseCSVCustomers } from '@/lib/csvImport';
 import { getCustomerMonthlyAmount } from '@/lib/billing';
 import CustomerDialog from './CustomerDialog';
+import CustomerDetailView from './CustomerDetailView';
 import type { Customer, Group, Settings } from '@/lib/types';
 import { toast } from 'sonner';
 
