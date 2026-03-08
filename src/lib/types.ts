@@ -83,6 +83,17 @@ export interface Settings {
   defaultBillingDay: number;
 }
 
+export interface ActivityLog {
+  id?: number;
+  type: 'payment' | 'batch' | 'extra_charge' | 'advance' | 'debt_created' | 'debt_deleted' | 'cash_override' | 'other';
+  description: string;
+  customerId?: number;
+  customerName?: string;
+  amount?: number;
+  relatedId?: number; // debt or batch id
+  createdAt: string;
+}
+
 export const DEFAULT_SETTINGS: Settings = {
   id: 1,
   organizationName: '',

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { LayoutDashboard, Users, FolderKanban, CreditCard, Settings, Banknote } from 'lucide-react';
+import { LayoutDashboard, Users, FolderKanban, CreditCard, Settings, Banknote, History } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import DashboardView from '@/components/DashboardView';
 import CustomersView from '@/components/CustomersView';
@@ -7,6 +7,7 @@ import GroupsView from '@/components/GroupsView';
 import BillingView from '@/components/BillingView';
 import DebtsView from '@/components/DebtsView';
 import SettingsView from '@/components/SettingsView';
+import ActivityLogView from '@/components/ActivityLogView';
 import CommandPalette from '@/components/CommandPalette';
 import ThemeToggle from '@/components/ThemeToggle';
 
@@ -16,6 +17,7 @@ const TABS = [
   { id: 'groups', label: 'קבוצות', icon: FolderKanban },
   { id: 'billing', label: 'גבייה (בנק)', icon: CreditCard },
   { id: 'debts', label: 'חובות (מזומן)', icon: Banknote },
+  { id: 'activity', label: 'פעולות', icon: History },
   { id: 'settings', label: 'הגדרות', icon: Settings },
 ];
 
@@ -70,6 +72,7 @@ const Index = () => {
           <TabsContent value="groups"><GroupsView /></TabsContent>
           <TabsContent value="billing"><BillingView /></TabsContent>
           <TabsContent value="debts"><DebtsView /></TabsContent>
+          <TabsContent value="activity"><ActivityLogView /></TabsContent>
           <TabsContent value="settings"><SettingsView /></TabsContent>
         </Tabs>
       </div>

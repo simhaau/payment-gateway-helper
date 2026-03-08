@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { getAllCustomers, getAllDebts, addDebt, updateDebt, deleteDebt } from '@/lib/db';
+import { getAllCustomers, getAllDebts, addDebt, updateDebt, deleteDebt, addActivity } from '@/lib/db';
 import type { Customer, DebtRecord } from '@/lib/types';
 import { toast } from 'sonner';
 
@@ -116,6 +116,15 @@ export default function DebtsView() {
       paidAmount: Math.min(newPaid, payDialog.amount),
       status: newStatus,
       paidDate: newStatus === 'paid' ? new Date().toISOString().split('T')[0] : payDialog.paidDate,
+    });
+    await addActivity({
+      type: 'payment',
+      description: `תשלום ₪${payAmount.toLocaleString()} מ${payDialog.customerName} (${payDialog.month}) — ${newStatus === 'paid' ? 'סולק' : 'חלקי'}`,
+      customerId: payDialog.customerId,
+      customerName: payDialog.customerName,
+      amount: payAmount,
+      relatedId: payDialog.id,
+      createdAt: new Date().toISOString(),
     });
     toast.success(newStatus === 'paid' ? 'החוב סולק במלואו' : `שולם ₪${payAmount} חלקית`);
     setPayDialog(null);
@@ -226,6 +235,14 @@ export default function DebtsView() {
     if (totalUsed > 0) parts.push(`₪${totalUsed.toLocaleString()} כיסו חובות קיימים`);
     if (monthsToPayFull > 0) parts.push(`${monthsToPayFull} חודשים שולמו מראש`);
     if (remainder > 0) parts.push(`₪${remainder.toLocaleString()} עודף לחודש הבא`);
+    await addActivity({
+      type: 'advance',
+      description: `תשלום מראש: ${parts.join(' • ')} — ${cust.nickname || cust.fullName}`,
+      customerId: cust.id,
+      customerName: cust.nickname || cust.fullName,
+      amount: advanceMode === 'amount' ? advanceTotalAmount : advanceAmount * advanceMonths,
+      createdAt: new Date().toISOString(),
+    });
     toast.success(parts.join(' • ') || 'התשלום בוצע');
 
     setAdvanceDialog(false);
@@ -237,6 +254,14 @@ export default function DebtsView() {
 
   const handleDeleteDebt = async () => {
     if (!deleteTarget?.id) return;
+    await addActivity({
+      type: 'debt_deleted',
+      description: `מחיקת חיוב: ₪${deleteTarget.amount.toLocaleString()} של ${deleteTarget.customerName} (${deleteTarget.month})`,
+      customerId: deleteTarget.customerId,
+      customerName: deleteTarget.customerName,
+      amount: deleteTarget.amount,
+      createdAt: new Date().toISOString(),
+    });
     await deleteDebt(deleteTarget.id);
     toast.success('החיוב נמחק');
     setDeleteTarget(null);
@@ -258,6 +283,14 @@ export default function DebtsView() {
       status: 'unpaid',
       paidDate: '',
       notes: extraChargeNotes || 'חיוב נוסף',
+      createdAt: now.toISOString(),
+    });
+    await addActivity({
+      type: 'extra_charge',
+      description: `חיוב נוסף: ₪${extraChargeAmount.toLocaleString()} ל${cust.nickname || cust.fullName} (${extraChargeNotes || 'חיוב נוסף'})`,
+      customerId: cust.id,
+      customerName: cust.nickname || cust.fullName,
+      amount: extraChargeAmount,
       createdAt: now.toISOString(),
     });
     toast.success(`חיוב נוסף של ₪${extraChargeAmount.toLocaleString()} נוצר ל${cust.nickname || cust.fullName}`);
@@ -282,6 +315,15 @@ export default function DebtsView() {
       status: newStatus,
       paidDate: newStatus === 'paid' ? new Date().toISOString().split('T')[0] : debt.paidDate,
       notes: debt.notes ? `${debt.notes} | שולם במזומן` : 'שולם במזומן',
+    });
+    await addActivity({
+      type: 'cash_override',
+      description: `תשלום במזומן: ₪${actualPay.toLocaleString()} מ${debt.customerName} (${debt.month}) — ${newStatus === 'paid' ? 'סולק' : 'חלקי'}`,
+      customerId: debt.customerId,
+      customerName: debt.customerName,
+      amount: actualPay,
+      relatedId: debt.id,
+      createdAt: new Date().toISOString(),
     });
     toast.success(newStatus === 'paid' ? `החוב סולק במזומן (₪${actualPay.toLocaleString()})` : `שולם ₪${actualPay.toLocaleString()} במזומן`);
     setCashPayDialog(false);
