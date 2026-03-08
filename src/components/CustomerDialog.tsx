@@ -84,14 +84,15 @@ export default function CustomerDialog({ open, onOpenChange, customer, groups, o
   // Auto-split for mixed
   useEffect(() => {
     if (paymentMethod === 'mixed' && monthlyAmount > 0) {
-      if (bankAmount + cashAmount !== monthlyAmount) {
+      const sum = bankAmount + cashAmount;
+      if (sum <= 0 || sum !== monthlyAmount) {
         const half = Math.floor(monthlyAmount / 2);
         setBankAmount(half);
         setCashAmount(monthlyAmount - half);
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paymentMethod]);
+  }, [paymentMethod, monthlyAmount]);
 
   const handleSave = useCallback(async () => {
     if (!fullName.trim()) { toast.error('שם הלקוח חובה'); return; }
