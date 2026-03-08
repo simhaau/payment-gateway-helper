@@ -117,6 +117,15 @@ export default function DebtsView() {
       status: newStatus,
       paidDate: newStatus === 'paid' ? new Date().toISOString().split('T')[0] : payDialog.paidDate,
     });
+    await addActivity({
+      type: 'payment',
+      description: `תשלום ₪${payAmount.toLocaleString()} מ${payDialog.customerName} (${payDialog.month}) — ${newStatus === 'paid' ? 'סולק' : 'חלקי'}`,
+      customerId: payDialog.customerId,
+      customerName: payDialog.customerName,
+      amount: payAmount,
+      relatedId: payDialog.id,
+      createdAt: new Date().toISOString(),
+    });
     toast.success(newStatus === 'paid' ? 'החוב סולק במלואו' : `שולם ₪${payAmount} חלקית`);
     setPayDialog(null);
     setPayAmount(0);
