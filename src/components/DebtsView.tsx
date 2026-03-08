@@ -18,6 +18,8 @@ import { toast } from 'sonner';
 export default function DebtsView() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [debts, setDebts] = useState<DebtRecord[]>([]);
+  const [settings, setSettings] = useState<Settings | null>(null);
+  const [debts, setDebts] = useState<DebtRecord[]>([]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [payDialog, setPayDialog] = useState<DebtRecord | null>(null);
