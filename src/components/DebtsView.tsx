@@ -833,6 +833,46 @@ export default function DebtsView() {
         </DialogContent>
       </Dialog>
 
+      {/* Money Charge Dialog */}
+      <Dialog open={moneyChargeDialog} onOpenChange={setMoneyChargeDialog}>
+        <DialogContent onPointerDownOutside={e => e.preventDefault()}>
+          <DialogHeader>
+            <DialogTitle>חיוב כספי נוסף</DialogTitle>
+            <DialogDescription>הוסף חיוב חד-פעמי בשקלים לחודש הנוכחי — ייגבה יחד עם הגבייה החודשית</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label>לקוח</Label>
+              <Select value={moneyChargeCustomerId} onValueChange={setMoneyChargeCustomerId}>
+                <SelectTrigger><SelectValue placeholder="בחר לקוח" /></SelectTrigger>
+                <SelectContent>
+                  {customers.filter(c => c.status === 'active').map(c => (
+                    <SelectItem key={c.id} value={String(c.id)}>
+                      {c.nickname || c.fullName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>סכום (₪)</Label>
+              <Input type="number" dir="ltr" value={moneyChargeAmount || ''} onChange={e => setMoneyChargeAmount(Number(e.target.value) || 0)} placeholder="למשל 200" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>הערה</Label>
+              <Textarea value={moneyChargeNotes} onChange={e => setMoneyChargeNotes(e.target.value)} placeholder="סיבת החיוב..." rows={2} />
+            </div>
+          </div>
+          <div className="flex justify-end gap-3">
+            <Button variant="secondary" onClick={() => setMoneyChargeDialog(false)}>ביטול</Button>
+            <Button onClick={handleMoneyCharge} disabled={!moneyChargeCustomerId || moneyChargeAmount <= 0}>
+              <CreditCard className="h-4 w-4 ml-1" />
+              צור חיוב
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Cash Payment Dialog */}
       <Dialog open={cashPayDialog} onOpenChange={setCashPayDialog}>
         <DialogContent onPointerDownOutside={e => e.preventDefault()}>
