@@ -238,6 +238,70 @@ export default function CustomerDetailView({ customer, onBack }: Props) {
     setEditDialog(null);
     loadData();
   };
+  // --- Report Export ---
+  const handleExportCustomerPDF = async () => {
+    try {
+      const { default: jsPDF } = await import('jspdf');
+      await import('jspdf-autotable');
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+      doc.setFontSize(16);
+      const title = `Report: ${customer.fullName} (${customer.nickname || ''})`;
+      doc.text(title, doc.internal.pageSize.width / 2, 15, { align: 'center' });
+      doc.setFontSize(10);
+      doc.text(`Generated: ${new Date().toLocaleDateString('he-IL')}`, doc.internal.pageSize.width / 2, 22, { align: 'center' });
+      
+      const tableData = monthlyBreakdown.map(m => [
+        m.debts.map(d => d.status === 'paid' ? 'Paid' : d.status === 'suspended' ? 'Suspended' : 'Unpaid').join(', '),
+        m.balance.toLocaleString(),
+        m.paid.toLocaleString(),
+        m.total.toLocaleString(),
+        m.debts.length.toString(),
+        m.month,
+      ]);
+      tableData.push([
+        '', totalEverCharged - totalEverPaid > 0 ? (totalEverCharged - totalEverPaid).toLocaleString() : '0',
+        totalEverPaid.toLocaleString(), totalEverCharged.toLocaleString(), debts.length.toString(), 'Total',
+      ]);
+      (doc as any).autoTable({
+        startY: 28,
+        head: [['Status', 'Balance', 'Paid', 'Total', 'Charges', 'Month']],
+        body: tableData,
+        styles: { halign: 'center', fontSize: 9 },
+        headStyles: { fillColor: [59, 130, 246] },
+        alternateRowStyles: { fillColor: [248, 250, 252] },
+      });
+      doc.save(`customer_${customer.id}_report.pdf`);
+      toast.success('PDF יוצא בהצלחה');
+    } catch (e) {
+      toast.error('שגיאה בייצוא PDF');
+    }
+  };
+
+  const handleExportCustomerExcel = async () => {
+    try {
+      const XLSX = await import('xlsx');
+      const wsData = [
+        [`דוח לקוח: ${customer.fullName}`],
+        [],
+        ['חודש', 'מספר חיובים', 'סה"כ', 'שולם', 'יתרה', 'סטטוס'],
+        ...monthlyBreakdown.map(m => [
+          m.month, m.debts.length, m.total, m.paid, m.balance,
+          m.debts.every(d => d.status === 'paid') ? 'שולם' : m.balance > 0 ? 'חוב' : 'לא שולם',
+        ]),
+        [],
+        ['סה"כ', debts.length, totalEverCharged, totalEverPaid, totalEverCharged - totalEverPaid, ''],
+      ];
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+      ws['!cols'] = [{ wch: 12 }, { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 10 }];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'דוח');
+      XLSX.writeFile(wb, `customer_${customer.id}_report.xlsx`);
+      toast.success('Excel יוצא בהצלחה');
+    } catch (e) {
+      toast.error('שגיאה בייצוא Excel');
+    }
+  };
+
 
   const paymentMethodLabel = {
     bank: { label: 'הוראת קבע (בנק)', icon: Building2, color: 'text-primary' },
