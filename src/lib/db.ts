@@ -253,6 +253,7 @@ export async function getSettings(): Promise<Settings> {
 export async function saveSettings(s: Settings): Promise<void> {
   const store = await txStore('settings', 'readwrite');
   await reqToPromise(store.put({ ...s, id: 1 }));
+  scheduleBackup();
 }
 
 // EXPORT DATA
