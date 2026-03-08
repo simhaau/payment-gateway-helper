@@ -83,7 +83,16 @@ export interface Settings {
   defaultBillingDay: number;
 }
 
-export const DEFAULT_SETTINGS: Settings = {
+export interface ActivityLog {
+  id?: number;
+  type: 'payment' | 'batch' | 'extra_charge' | 'advance' | 'debt_created' | 'debt_deleted' | 'cash_override' | 'other';
+  description: string;
+  customerId?: number;
+  customerName?: string;
+  amount?: number;
+  relatedId?: number; // debt or batch id
+  createdAt: string;
+}
   id: 1,
   organizationName: '',
   masavSenderCode: '',
