@@ -111,9 +111,11 @@ export default function CustomersView() {
 
   const displayName = (c: Customer) => c.nickname || c.fullName;
 
+  const pricePerAmpere = settings?.pricePerAmpere || 0;
+
   const exportCSV = () => {
-    const headers = ['שם', 'כינוי', 'ת.ז', 'טלפון', 'אימייל', 'תשלום', 'בנק', 'סניף', 'חשבון', 'סכום', 'סטטוס'];
-    const rows = filtered.map(c => [c.fullName, c.nickname || '', c.idNumber, c.phone, c.email, PAYMENT_ICONS[c.paymentMethod || 'bank']?.label || 'בנק', c.bankNumber, c.branchNumber, c.accountNumber, c.monthlyAmount, STATUS_MAP[c.status]?.label || c.status]);
+    const headers = ['שם', 'כינוי', 'ת.ז', 'טלפון', 'אימייל', 'תשלום', 'בנק', 'סניף', 'חשבון', 'אמפרים', 'סכום', 'סטטוס'];
+    const rows = filtered.map(c => [c.fullName, c.nickname || '', c.idNumber, c.phone, c.email, PAYMENT_ICONS[c.paymentMethod || 'bank']?.label || 'בנק', c.bankNumber, c.branchNumber, c.accountNumber, c.amperes || 0, getCustomerMonthlyAmount(c, pricePerAmpere), STATUS_MAP[c.status]?.label || c.status]);
     const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a');
