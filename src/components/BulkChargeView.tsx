@@ -117,14 +117,15 @@ export default function BulkChargeView() {
         }
       }
 
+      const totalCount = targetCustomers.length;
       await addActivity({
         type: 'extra_charge',
-        description: `חיוב גורף ₪${chargeAmount.toLocaleString()} ל-${count} לקוחות (${month}) — ${noteText}`,
+        description: `חיוב גורף ₪${chargeAmount.toLocaleString()} ל-${totalCount} לקוחות${spreadMonths > 1 ? ` × ${spreadMonths} חודשים` : ''} (${month}) — ${noteText}`,
         amount: chargeAmount * count,
         createdAt: now,
       });
 
-      toast.success(`חיוב ₪${chargeAmount.toLocaleString()} נוסף ל-${count} לקוחות`);
+      toast.success(`חיוב ₪${chargeAmount.toLocaleString()} נוסף ל-${totalCount} לקוחות${spreadMonths > 1 ? ` ל-${spreadMonths} חודשים` : ''}`);
       setConfirmDialog(false);
       setAmount(0);
       setAmperes(0);
