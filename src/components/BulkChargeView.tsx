@@ -33,6 +33,7 @@ export default function BulkChargeView() {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
   const [notes, setNotes] = useState('');
+  const [spreadMonths, setSpreadMonths] = useState(1); // multi-month support
   const [confirmDialog, setConfirmDialog] = useState(false);
   const [creating, setCreating] = useState(false);
 
