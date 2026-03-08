@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Search, Plus, Check, AlertCircle, Banknote, TrendingDown, CreditCard, Calendar } from 'lucide-react';
+import { Search, Plus, Check, AlertCircle, Banknote, TrendingDown, CreditCard, Calendar, Trash2, PlusCircle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -7,8 +7,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
-import { getAllCustomers, getAllDebts, addDebt, updateDebt } from '@/lib/db';
+import { Textarea } from '@/components/ui/textarea';
+import { getAllCustomers, getAllDebts, addDebt, updateDebt, deleteDebt } from '@/lib/db';
 import type { Customer, DebtRecord } from '@/lib/types';
 import { toast } from 'sonner';
 
