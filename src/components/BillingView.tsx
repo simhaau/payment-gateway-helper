@@ -10,7 +10,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { getAllCustomers, getAllGroups, getAllBatches, getAllDebts, addBatch, updateBatch, updateDebt, getSettings, addActivity } from '@/lib/db';
-import { getCustomersDueForBilling, createBillingBatch } from '@/lib/billing';
+import { getCustomersDueForBilling, createBillingBatch, getCustomerMonthlyAmount } from '@/lib/billing';
 import { generateMasavFile, validateBatchForMasav, downloadMasavFile } from '@/lib/masav';
 import type { Customer, Group, BillingBatch, DebtRecord, Settings } from '@/lib/types';
 import { toast } from 'sonner';
