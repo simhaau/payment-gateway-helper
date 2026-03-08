@@ -226,7 +226,7 @@ export async function getAllBatches(): Promise<BillingBatch[]> {
 
 export async function addBatch(b: Omit<BillingBatch, 'id'>): Promise<number> {
   const store = await txStore('batches', 'readwrite');
-  const id = await reqToPromise(store.add(b)) as Promise<number>;
+  const id = (await reqToPromise(store.add(b))) as number;
   scheduleBackup();
   return id;
 }
