@@ -75,7 +75,9 @@ const Index = () => {
           <TabsContent value="customers"><CustomersView /></TabsContent>
           <TabsContent value="groups"><GroupsView /></TabsContent>
           <TabsContent value="billing"><BillingView /></TabsContent>
+          <TabsContent value="bulk-charge"><BulkChargeView /></TabsContent>
           <TabsContent value="debts"><DebtsView /></TabsContent>
+          <TabsContent value="reports"><ReportsView /></TabsContent>
           <TabsContent value="activity"><ActivityLogView /></TabsContent>
           <TabsContent value="settings"><SettingsView /></TabsContent>
         </Tabs>
