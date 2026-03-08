@@ -203,6 +203,10 @@ export default function CustomersView() {
           <Download className="h-4 w-4 ml-1" />
           ייצוא
         </Button>
+        <Button variant="secondary" onClick={handleImportCSV}>
+          <Upload className="h-4 w-4 ml-1" />
+          ייבוא CSV
+        </Button>
       </div>
 
       {/* Bulk Actions */}
