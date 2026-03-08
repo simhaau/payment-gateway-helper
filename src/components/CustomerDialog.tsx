@@ -322,7 +322,7 @@ export default function CustomerDialog({ open, onOpenChange, customer, groups, o
           {/* Actions */}
           <div className="flex justify-end gap-3 pt-2 sticky bottom-0 bg-background pb-2">
             <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>ביטול</Button>
-            <Button type="submit">{isEdit ? 'שמור שינויים' : 'הוסף לקוח'}</Button>
+            <Button type="button" onClick={handleSave}>{isEdit ? 'שמור שינויים' : 'הוסף לקוח'}</Button>
           </div>
         </form>
       </DialogContent>
