@@ -278,6 +278,25 @@ export default function CustomersView() {
                       </span>
                     )}
                   </TableCell>
+                  <TableCell>
+                    {(() => {
+                      const monthData = getCustomerTotalThisMonth(c.id!);
+                      if (monthData.totalCharged === 0) return <span className="text-muted-foreground">—</span>;
+                      return (
+                        <div>
+                          <span className={`font-medium ${monthData.balance > 0 ? 'text-destructive' : 'text-success'}`}>
+                            ₪{monthData.totalCharged.toLocaleString()}
+                          </span>
+                          {monthData.balance <= 0 && monthData.totalPaid > 0 && (
+                            <span className="text-xs text-success block">שולם ✓</span>
+                          )}
+                          {monthData.balance > 0 && (
+                            <span className="text-xs text-destructive block">יתרה: ₪{monthData.balance.toLocaleString()}</span>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </TableCell>
                   <TableCell>{c.groupId ? <Badge variant="outline">{groupName(c.groupId)}</Badge> : '-'}</TableCell>
                   <TableCell><Badge variant={STATUS_MAP[c.status]?.variant || 'secondary'}>{STATUS_MAP[c.status]?.label || c.status}</Badge></TableCell>
                   <TableCell>
