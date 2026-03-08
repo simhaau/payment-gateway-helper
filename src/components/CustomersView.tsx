@@ -213,6 +213,7 @@ export default function CustomersView() {
               <TableHead>טלפון</TableHead>
               <TableHead>תשלום</TableHead>
               <TableHead>בנק/סניף/חשבון</TableHead>
+              <TableHead>אמפרים</TableHead>
               <TableHead>סכום חודשי</TableHead>
               <TableHead>קבוצה</TableHead>
               <TableHead>סטטוס</TableHead>
