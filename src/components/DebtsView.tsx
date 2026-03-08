@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Search, Plus, Check, AlertCircle, Banknote, TrendingDown, CreditCard, Calendar, Trash2, PlusCircle, RefreshCw } from 'lucide-react';
+import { Search, Plus, Check, AlertCircle, Banknote, TrendingDown, CreditCard, Calendar, Trash2, PlusCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -38,13 +38,11 @@ export default function DebtsView() {
   const [extraChargeCustomerId, setExtraChargeCustomerId] = useState('');
   const [extraChargeAmount, setExtraChargeAmount] = useState(0);
   const [extraChargeNotes, setExtraChargeNotes] = useState('');
-  // Cash override dialog
-  const [cashOverrideDialog, setCashOverrideDialog] = useState(false);
-  const [cashOverrideCustomerId, setCashOverrideCustomerId] = useState('');
-  const [cashOverrideMonth, setCashOverrideMonth] = useState(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  });
+  // Cash payment dialog (pay any customer's debt in cash)
+  const [cashPayDialog, setCashPayDialog] = useState(false);
+  const [cashPayCustomerId, setCashPayCustomerId] = useState('');
+  const [cashPayDebtId, setCashPayDebtId] = useState('');
+  const [cashPayAmount, setCashPayAmount] = useState(0);
 
   const loadData = () => {
     Promise.all([getAllCustomers(), getAllDebts()])
@@ -265,43 +263,29 @@ export default function DebtsView() {
     loadData();
   };
 
-  const handleCashOverride = async () => {
-    if (!cashOverrideCustomerId) return;
-    const cust = customers.find(c => c.id === Number(cashOverrideCustomerId));
-    if (!cust) return;
-    if (cust.paymentMethod !== 'bank' && cust.paymentMethod !== 'mixed') {
-      toast.error('לקוח זה כבר משלם במזומן');
-      return;
-    }
-    const amount = cust.paymentMethod === 'mixed' ? cust.bankAmount : cust.monthlyAmount;
-    if (amount <= 0) { toast.error('לא הוגדר סכום חודשי'); return; }
-    const existing = debts.find(d => d.customerId === cust.id && d.month === cashOverrideMonth);
-    if (existing) {
-      toast.error('כבר קיים חיוב לחודש זה ללקוח');
-      return;
-    }
-    const now = new Date();
-    await addDebt({
-      customerId: cust.id!,
-      customerName: cust.nickname || cust.fullName,
-      month: cashOverrideMonth,
-      amount,
-      paidAmount: 0,
-      status: 'unpaid',
-      paidDate: '',
-      notes: 'תשלום במזומן במקום בנק',
-      createdAt: now.toISOString(),
+  const handleCashPay = async () => {
+    if (!cashPayCustomerId || !cashPayDebtId || cashPayAmount <= 0) return;
+    const debt = debts.find(d => d.id === Number(cashPayDebtId));
+    if (!debt) return;
+    const remaining = debt.amount - debt.paidAmount;
+    const actualPay = Math.min(cashPayAmount, remaining);
+    const newPaid = debt.paidAmount + actualPay;
+    const newStatus = newPaid >= debt.amount ? 'paid' : 'partial';
+    await updateDebt({
+      ...debt,
+      paidAmount: newPaid,
+      status: newStatus,
+      paidDate: newStatus === 'paid' ? new Date().toISOString().split('T')[0] : debt.paidDate,
+      notes: debt.notes ? `${debt.notes} | שולם במזומן` : 'שולם במזומן',
     });
-    toast.success(`חיוב מזומן של ₪${amount.toLocaleString()} נוצר ל${cust.nickname || cust.fullName}`);
-    setCashOverrideDialog(false);
-    setCashOverrideCustomerId('');
+    toast.success(newStatus === 'paid' ? `החוב סולק במזומן (₪${actualPay.toLocaleString()})` : `שולם ₪${actualPay.toLocaleString()} במזומן`);
+    setCashPayDialog(false);
+    setCashPayCustomerId('');
+    setCashPayDebtId('');
+    setCashPayAmount(0);
     loadData();
   };
 
-  const bankCustomers = useMemo(() =>
-    customers.filter(c => c.status === 'active' && (c.paymentMethod === 'bank' || c.paymentMethod === 'mixed')),
-    [customers]
-  );
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -393,9 +377,9 @@ export default function DebtsView() {
           <PlusCircle className="h-4 w-4 ml-1" />
           חיוב נוסף
         </Button>
-        <Button variant="outline" onClick={() => setCashOverrideDialog(true)}>
-          <RefreshCw className="h-4 w-4 ml-1" />
-          תשלום מזומן במקום בנק
+        <Button variant="outline" onClick={() => setCashPayDialog(true)}>
+          <Banknote className="h-4 w-4 ml-1" />
+          שלם במזומן
         </Button>
       </div>
 
@@ -739,47 +723,65 @@ export default function DebtsView() {
         </DialogContent>
       </Dialog>
 
-      {/* Cash Override Dialog */}
-      <Dialog open={cashOverrideDialog} onOpenChange={setCashOverrideDialog}>
+      {/* Cash Payment Dialog */}
+      <Dialog open={cashPayDialog} onOpenChange={setCashPayDialog}>
         <DialogContent onPointerDownOutside={e => e.preventDefault()}>
           <DialogHeader>
-            <DialogTitle>תשלום מזומן במקום בנק</DialogTitle>
-            <DialogDescription>צור חיוב מזומן ללקוח בנק לחודש ספציפי — במקום גבייה דרך הבנק</DialogDescription>
+            <DialogTitle>תשלום במזומן</DialogTitle>
+            <DialogDescription>בחר לקוח וחוב לתשלום במזומן — גם ללקוחות בנק</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
-              <Label>לקוח (בנק/משולב)</Label>
-              <Select value={cashOverrideCustomerId} onValueChange={setCashOverrideCustomerId}>
+              <Label>לקוח</Label>
+              <Select value={cashPayCustomerId} onValueChange={v => { setCashPayCustomerId(v); setCashPayDebtId(''); setCashPayAmount(0); }}>
                 <SelectTrigger><SelectValue placeholder="בחר לקוח" /></SelectTrigger>
                 <SelectContent>
-                  {bankCustomers.map(c => (
+                  {customers.filter(c => c.status === 'active').map(c => (
                     <SelectItem key={c.id} value={String(c.id)}>
-                      {c.nickname || c.fullName} (₪{(c.paymentMethod === 'mixed' ? c.bankAmount : c.monthlyAmount).toLocaleString()}/חודש)
+                      {c.nickname || c.fullName} ({c.paymentMethod === 'bank' ? 'בנק' : c.paymentMethod === 'mixed' ? 'משולב' : 'מזומן'})
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1.5">
-              <Label>חודש</Label>
-              <Input type="month" dir="ltr" value={cashOverrideMonth} onChange={e => setCashOverrideMonth(e.target.value)} />
-            </div>
-            {cashOverrideCustomerId && (
-              <div className="text-sm bg-muted/50 rounded-lg p-3">
-                {(() => {
-                  const c = customers.find(c => c.id === Number(cashOverrideCustomerId));
-                  if (!c) return null;
-                  const amt = c.paymentMethod === 'mixed' ? c.bankAmount : c.monthlyAmount;
-                  return <p>הסכום שייווצר כחיוב מזומן: <span className="font-semibold">₪{amt.toLocaleString()}</span></p>;
-                })()}
-              </div>
-            )}
+            {cashPayCustomerId && (() => {
+              const customerDebts = debts.filter(d => d.customerId === Number(cashPayCustomerId) && d.status !== 'paid' && d.status !== 'advance');
+              return customerDebts.length > 0 ? (
+                <>
+                  <div className="space-y-1.5">
+                    <Label>חוב לתשלום</Label>
+                    <Select value={cashPayDebtId} onValueChange={v => {
+                      setCashPayDebtId(v);
+                      const d = customerDebts.find(d => d.id === Number(v));
+                      if (d) setCashPayAmount(d.amount - d.paidAmount);
+                    }}>
+                      <SelectTrigger><SelectValue placeholder="בחר חוב" /></SelectTrigger>
+                      <SelectContent>
+                        {customerDebts.map(d => (
+                          <SelectItem key={d.id} value={String(d.id)}>
+                            {d.month} — יתרה ₪{(d.amount - d.paidAmount).toLocaleString()} {d.notes ? `(${d.notes})` : ''}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {cashPayDebtId && (
+                    <div className="space-y-1.5">
+                      <Label>סכום לתשלום (₪)</Label>
+                      <Input type="number" dir="ltr" value={cashPayAmount || ''} onChange={e => setCashPayAmount(Number(e.target.value) || 0)} />
+                    </div>
+                  )}
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">אין חובות פתוחים ללקוח זה</p>
+              );
+            })()}
           </div>
           <div className="flex justify-end gap-3">
-            <Button variant="secondary" onClick={() => setCashOverrideDialog(false)}>ביטול</Button>
-            <Button onClick={handleCashOverride} disabled={!cashOverrideCustomerId}>
-              <RefreshCw className="h-4 w-4 ml-1" />
-              צור חיוב מזומן
+            <Button variant="secondary" onClick={() => setCashPayDialog(false)}>ביטול</Button>
+            <Button onClick={handleCashPay} disabled={!cashPayDebtId || cashPayAmount <= 0}>
+              <Banknote className="h-4 w-4 ml-1" />
+              שלם במזומן
             </Button>
           </div>
         </DialogContent>
