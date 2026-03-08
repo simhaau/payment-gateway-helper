@@ -10,8 +10,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { getAllCustomers, getAllDebts, addDebt, updateDebt, deleteDebt, addActivity } from '@/lib/db';
-import type { Customer, DebtRecord } from '@/lib/types';
+import { getAllCustomers, getAllDebts, addDebt, updateDebt, deleteDebt, addActivity, getSettings } from '@/lib/db';
+import { getCustomerMonthlyAmount } from '@/lib/billing';
+import type { Customer, DebtRecord, Settings } from '@/lib/types';
 import { toast } from 'sonner';
 
 export default function DebtsView() {
