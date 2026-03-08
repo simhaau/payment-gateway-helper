@@ -40,6 +40,11 @@ export default function DebtsView() {
   const [extraChargeCustomerId, setExtraChargeCustomerId] = useState('');
   const [extraChargeAmperes, setExtraChargeAmperes] = useState(0);
   const [extraChargeNotes, setExtraChargeNotes] = useState('');
+  // Extra money charge dialog
+  const [moneyChargeDialog, setMoneyChargeDialog] = useState(false);
+  const [moneyChargeCustomerId, setMoneyChargeCustomerId] = useState('');
+  const [moneyChargeAmount, setMoneyChargeAmount] = useState(0);
+  const [moneyChargeNotes, setMoneyChargeNotes] = useState('');
   // Cash payment dialog (pay any customer's debt in cash)
   const [cashPayDialog, setCashPayDialog] = useState(false);
   const [cashPayCustomerId, setCashPayCustomerId] = useState('');
@@ -310,6 +315,39 @@ export default function DebtsView() {
     loadData();
   };
 
+  const handleMoneyCharge = async () => {
+    if (!moneyChargeCustomerId || moneyChargeAmount <= 0) return;
+    const cust = customers.find(c => c.id === Number(moneyChargeCustomerId));
+    if (!cust) return;
+    const now = new Date();
+    const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    await addDebt({
+      customerId: cust.id!,
+      customerName: cust.nickname || cust.fullName,
+      month,
+      amount: moneyChargeAmount,
+      paidAmount: 0,
+      status: 'unpaid',
+      paidDate: '',
+      notes: moneyChargeNotes || 'חיוב כספי נוסף',
+      createdAt: now.toISOString(),
+    });
+    await addActivity({
+      type: 'extra_charge',
+      description: `חיוב כספי נוסף: ₪${moneyChargeAmount.toLocaleString()} ל${cust.nickname || cust.fullName} (${moneyChargeNotes || 'חיוב נוסף'})`,
+      customerId: cust.id,
+      customerName: cust.nickname || cust.fullName,
+      amount: moneyChargeAmount,
+      createdAt: now.toISOString(),
+    });
+    toast.success(`חיוב של ₪${moneyChargeAmount.toLocaleString()} נוצר ל${cust.nickname || cust.fullName}`);
+    setMoneyChargeDialog(false);
+    setMoneyChargeCustomerId('');
+    setMoneyChargeAmount(0);
+    setMoneyChargeNotes('');
+    loadData();
+  };
+
   const handleCashPay = async () => {
     if (!cashPayCustomerId || !cashPayDebtId || cashPayAmount <= 0) return;
     const debt = debts.find(d => d.id === Number(cashPayDebtId));
@@ -432,6 +470,10 @@ export default function DebtsView() {
         <Button variant="outline" onClick={() => setExtraChargeDialog(true)}>
           <PlusCircle className="h-4 w-4 ml-1" />
           אמפרים נוספים
+        </Button>
+        <Button variant="outline" onClick={() => setMoneyChargeDialog(true)}>
+          <CreditCard className="h-4 w-4 ml-1" />
+          חיוב כספי נוסף
         </Button>
         <Button variant="outline" onClick={() => setCashPayDialog(true)}>
           <Banknote className="h-4 w-4 ml-1" />
@@ -786,6 +828,46 @@ export default function DebtsView() {
             <Button onClick={handleExtraCharge} disabled={!extraChargeCustomerId || extraChargeAmperes <= 0}>
               <PlusCircle className="h-4 w-4 ml-1" />
               הוסף אמפרים
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Money Charge Dialog */}
+      <Dialog open={moneyChargeDialog} onOpenChange={setMoneyChargeDialog}>
+        <DialogContent onPointerDownOutside={e => e.preventDefault()}>
+          <DialogHeader>
+            <DialogTitle>חיוב כספי נוסף</DialogTitle>
+            <DialogDescription>הוסף חיוב חד-פעמי בשקלים לחודש הנוכחי — ייגבה יחד עם הגבייה החודשית</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label>לקוח</Label>
+              <Select value={moneyChargeCustomerId} onValueChange={setMoneyChargeCustomerId}>
+                <SelectTrigger><SelectValue placeholder="בחר לקוח" /></SelectTrigger>
+                <SelectContent>
+                  {customers.filter(c => c.status === 'active').map(c => (
+                    <SelectItem key={c.id} value={String(c.id)}>
+                      {c.nickname || c.fullName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>סכום (₪)</Label>
+              <Input type="number" dir="ltr" value={moneyChargeAmount || ''} onChange={e => setMoneyChargeAmount(Number(e.target.value) || 0)} placeholder="למשל 200" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>הערה</Label>
+              <Textarea value={moneyChargeNotes} onChange={e => setMoneyChargeNotes(e.target.value)} placeholder="סיבת החיוב..." rows={2} />
+            </div>
+          </div>
+          <div className="flex justify-end gap-3">
+            <Button variant="secondary" onClick={() => setMoneyChargeDialog(false)}>ביטול</Button>
+            <Button onClick={handleMoneyCharge} disabled={!moneyChargeCustomerId || moneyChargeAmount <= 0}>
+              <CreditCard className="h-4 w-4 ml-1" />
+              צור חיוב
             </Button>
           </div>
         </DialogContent>
