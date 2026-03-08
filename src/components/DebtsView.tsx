@@ -471,6 +471,10 @@ export default function DebtsView() {
           <PlusCircle className="h-4 w-4 ml-1" />
           אמפרים נוספים
         </Button>
+        <Button variant="outline" onClick={() => setMoneyChargeDialog(true)}>
+          <CreditCard className="h-4 w-4 ml-1" />
+          חיוב כספי נוסף
+        </Button>
         <Button variant="outline" onClick={() => setCashPayDialog(true)}>
           <Banknote className="h-4 w-4 ml-1" />
           שלם במזומן
