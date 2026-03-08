@@ -750,8 +750,8 @@ export default function DebtsView() {
       <Dialog open={extraChargeDialog} onOpenChange={setExtraChargeDialog}>
         <DialogContent onPointerDownOutside={e => e.preventDefault()}>
           <DialogHeader>
-            <DialogTitle>חיוב נוסף</DialogTitle>
-            <DialogDescription>הוסף חיוב חד-פעמי לחודש הנוכחי — ישולם במזומן</DialogDescription>
+            <DialogTitle>אמפרים נוספים</DialogTitle>
+            <DialogDescription>הוסף אמפרים נוספים לחודש הנוכחי בלבד — ייתוסף כחיוב על גבי האמפרים הקבועים</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
