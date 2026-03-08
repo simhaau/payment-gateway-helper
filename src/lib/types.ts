@@ -93,6 +93,8 @@ export interface ActivityLog {
   relatedId?: number; // debt or batch id
   createdAt: string;
 }
+
+export const DEFAULT_SETTINGS: Settings = {
   id: 1,
   organizationName: '',
   masavSenderCode: '',
