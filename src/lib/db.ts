@@ -1,7 +1,8 @@
-import { Customer, Group, BillingBatch, Settings, DebtRecord, DEFAULT_SETTINGS } from './types';
+import { Customer, Group, BillingBatch, Settings, DebtRecord, ActivityLog, DEFAULT_SETTINGS } from './types';
 
 const DB_NAME = 'masav_collection_system';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
+
 const BACKUP_KEY = 'masav_backup';
 
 let dbInstance: IDBDatabase | null = null;
