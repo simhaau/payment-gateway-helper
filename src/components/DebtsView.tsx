@@ -625,18 +625,25 @@ export default function DebtsView() {
                 setAdvanceCustomerId(v);
                 const c = allActiveCustomers.find(c => c.id === Number(v));
                 if (c) {
-                  const amt = c.paymentMethod === 'mixed' ? c.cashAmount : c.monthlyAmount;
+                  const ppa = settings?.pricePerAmpere || 0;
+                  const monthlyAmt = getCustomerMonthlyAmount(c, ppa);
+                  const amt = c.paymentMethod === 'mixed' ? c.cashAmount : monthlyAmt;
                   setAdvanceAmount(amt);
                   if (advanceMode === 'months') setAdvanceTotalAmount(amt * advanceMonths);
                 }
               }}>
                 <SelectTrigger><SelectValue placeholder="בחר לקוח" /></SelectTrigger>
                 <SelectContent>
-                  {allActiveCustomers.map(c => (
+                  {allActiveCustomers.map(c => {
+                    const ppa = settings?.pricePerAmpere || 0;
+                    const monthlyAmt = getCustomerMonthlyAmount(c, ppa);
+                    const amt = c.paymentMethod === 'mixed' ? c.cashAmount : monthlyAmt;
+                    return (
                     <SelectItem key={c.id} value={String(c.id)}>
-                      {c.nickname || c.fullName} (₪{(c.paymentMethod === 'mixed' ? c.cashAmount : c.monthlyAmount).toLocaleString()}/חודש • {c.paymentMethod === 'bank' ? 'בנק' : c.paymentMethod === 'mixed' ? 'משולב' : 'מזומן'})
+                      {c.nickname || c.fullName} ({c.amperes || 0} אמפר • ₪{amt.toLocaleString()}/חודש • {c.paymentMethod === 'bank' ? 'בנק' : c.paymentMethod === 'mixed' ? 'משולב' : 'מזומן'})
                     </SelectItem>
-                  ))}
+                    );
+                  })}
                 </SelectContent>
               </Select>
             </div>
