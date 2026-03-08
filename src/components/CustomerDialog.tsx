@@ -5,6 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
+import { Banknote, Building2, Shuffle } from 'lucide-react';
 import { addCustomer, updateCustomer } from '@/lib/db';
 import type { Customer, Group } from '@/lib/types';
 import { EMPTY_CUSTOMER } from '@/lib/types';
@@ -20,11 +22,15 @@ interface Props {
 
 export default function CustomerDialog({ open, onOpenChange, customer, groups, onSaved }: Props) {
   const [fullName, setFullName] = useState('');
+  const [nickname, setNickname] = useState('');
   const [idNumber, setIdNumber] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [address, setAddress] = useState('');
   const [notes, setNotes] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<'bank' | 'cash' | 'mixed'>('bank');
+  const [bankAmount, setBankAmount] = useState(0);
+  const [cashAmount, setCashAmount] = useState(0);
   const [bankNumber, setBankNumber] = useState('');
   const [branchNumber, setBranchNumber] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
@@ -40,16 +46,19 @@ export default function CustomerDialog({ open, onOpenChange, customer, groups, o
 
   const isEdit = !!customer;
 
-  // Only reset form when dialog opens
   useEffect(() => {
     if (!open) return;
     if (customer) {
       setFullName(customer.fullName);
+      setNickname(customer.nickname || '');
       setIdNumber(customer.idNumber);
       setPhone(customer.phone);
       setEmail(customer.email);
       setAddress(customer.address);
       setNotes(customer.notes);
+      setPaymentMethod(customer.paymentMethod || 'bank');
+      setBankAmount(customer.bankAmount || 0);
+      setCashAmount(customer.cashAmount || 0);
       setBankNumber(customer.bankNumber);
       setBranchNumber(customer.branchNumber);
       setAccountNumber(customer.accountNumber);
@@ -63,33 +72,39 @@ export default function CustomerDialog({ open, onOpenChange, customer, groups, o
       setStatus(customer.status);
       setGroupId(customer.groupId);
     } else {
-      setFullName('');
-      setIdNumber('');
-      setPhone('');
-      setEmail('');
-      setAddress('');
-      setNotes('');
-      setBankNumber('');
-      setBranchNumber('');
-      setAccountNumber('');
-      setAccountHolderName('');
-      setAuthorizationRef('');
-      setAuthorizationDate('');
-      setMonthlyAmount(0);
-      setBillingCycle('monthly');
-      setStartDate(new Date().toISOString().split('T')[0]);
-      setEndDate('');
-      setStatus('active');
-      setGroupId(null);
+      setFullName(''); setNickname(''); setIdNumber(''); setPhone(''); setEmail('');
+      setAddress(''); setNotes(''); setPaymentMethod('bank'); setBankAmount(0); setCashAmount(0);
+      setBankNumber(''); setBranchNumber(''); setAccountNumber('');
+      setAccountHolderName(''); setAuthorizationRef(''); setAuthorizationDate('');
+      setMonthlyAmount(0); setBillingCycle('monthly');
+      setStartDate(new Date().toISOString().split('T')[0]); setEndDate('');
+      setStatus('active'); setGroupId(null);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  // Auto-split for mixed
+  useEffect(() => {
+    if (paymentMethod === 'mixed' && monthlyAmount > 0) {
+      if (bankAmount + cashAmount !== monthlyAmount) {
+        const half = Math.floor(monthlyAmount / 2);
+        setBankAmount(half);
+        setCashAmount(monthlyAmount - half);
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paymentMethod]);
+
   const handleSave = useCallback(async () => {
     if (!fullName.trim()) { toast.error('שם הלקוח חובה'); return; }
+    if (paymentMethod === 'mixed' && bankAmount + cashAmount !== monthlyAmount) {
+      toast.error('סכום הבנק + מזומן חייב להיות שווה לסכום החודשי');
+      return;
+    }
     const now = new Date().toISOString();
     const data = {
-      fullName, idNumber, phone, email, address, notes,
+      fullName, nickname, idNumber, phone, email, address, notes,
+      paymentMethod, bankAmount, cashAmount,
       bankNumber, branchNumber, accountNumber, accountHolderName,
       authorizationRef, authorizationDate, monthlyAmount,
       billingCycle, startDate, endDate,
@@ -104,7 +119,13 @@ export default function CustomerDialog({ open, onOpenChange, customer, groups, o
     }
     onOpenChange(false);
     onSaved();
-  }, [fullName, idNumber, phone, email, address, notes, bankNumber, branchNumber, accountNumber, accountHolderName, authorizationRef, authorizationDate, monthlyAmount, billingCycle, startDate, endDate, status, groupId, isEdit, customer, onOpenChange, onSaved]);
+  }, [fullName, nickname, idNumber, phone, email, address, notes, paymentMethod, bankAmount, cashAmount, bankNumber, branchNumber, accountNumber, accountHolderName, authorizationRef, authorizationDate, monthlyAmount, billingCycle, startDate, endDate, status, groupId, isEdit, customer, onOpenChange, onSaved]);
+
+  const paymentMethodOptions = [
+    { value: 'bank', label: 'הוראת קבע (בנק)', icon: Building2, color: 'text-primary' },
+    { value: 'cash', label: 'מזומן', icon: Banknote, color: 'text-success' },
+    { value: 'mixed', label: 'משולב', icon: Shuffle, color: 'text-warning' },
+  ];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -120,8 +141,12 @@ export default function CustomerDialog({ open, onOpenChange, customer, groups, o
             <h3 className="text-sm font-semibold mb-3 text-primary">פרטים אישיים</h3>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">שם מלא *</Label>
-                <Input value={fullName} onChange={e => setFullName(e.target.value)} placeholder="ישראל ישראלי" className="h-9" />
+                <Label className="text-xs text-muted-foreground">שם מלא (לבנק - אנגלית) *</Label>
+                <Input value={fullName} onChange={e => setFullName(e.target.value)} placeholder="Israel Israeli" className="h-9" dir="ltr" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">כינוי (עברית)</Label>
+                <Input value={nickname} onChange={e => setNickname(e.target.value)} placeholder="ישראל ישראלי" className="h-9" />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">תעודת זהות</Label>
@@ -135,54 +160,112 @@ export default function CustomerDialog({ open, onOpenChange, customer, groups, o
                 <Label className="text-xs text-muted-foreground">אימייל</Label>
                 <Input value={email} onChange={e => setEmail(e.target.value)} type="email" dir="ltr" className="h-9" />
               </div>
-              <div className="col-span-2 space-y-1.5">
+              <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">כתובת</Label>
                 <Input value={address} onChange={e => setAddress(e.target.value)} className="h-9" />
               </div>
             </div>
           </div>
 
-          {/* Bank Details */}
+          {/* Payment Method */}
           <div>
-            <h3 className="text-sm font-semibold mb-3 text-primary">פרטי חשבון בנק</h3>
-            <div className="grid grid-cols-3 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">מספר בנק</Label>
-                <Input value={bankNumber} onChange={e => setBankNumber(e.target.value)} dir="ltr" placeholder="12" className="h-9" />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">מספר סניף</Label>
-                <Input value={branchNumber} onChange={e => setBranchNumber(e.target.value)} dir="ltr" placeholder="345" className="h-9" />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">מספר חשבון</Label>
-                <Input value={accountNumber} onChange={e => setAccountNumber(e.target.value)} dir="ltr" placeholder="123456789" className="h-9" />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3 mt-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">שם בעל החשבון</Label>
-                <Input value={accountHolderName} onChange={e => setAccountHolderName(e.target.value)} className="h-9" />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">מספר אסמכתא הרשאה</Label>
-                <Input value={authorizationRef} onChange={e => setAuthorizationRef(e.target.value)} dir="ltr" className="h-9" />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">תאריך הרשאה</Label>
-                <Input value={authorizationDate} onChange={e => setAuthorizationDate(e.target.value)} type="date" dir="ltr" className="h-9" />
-              </div>
+            <h3 className="text-sm font-semibold mb-3 text-primary">אופן תשלום</h3>
+            <div className="grid grid-cols-3 gap-2">
+              {paymentMethodOptions.map(opt => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setPaymentMethod(opt.value as 'bank' | 'cash' | 'mixed')}
+                  className={`flex items-center gap-2 p-3 rounded-lg border-2 transition-all text-sm font-medium ${
+                    paymentMethod === opt.value
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-border hover:border-muted-foreground/30 text-muted-foreground'
+                  }`}
+                >
+                  <opt.icon className={`h-4 w-4 ${paymentMethod === opt.value ? opt.color : ''}`} />
+                  {opt.label}
+                </button>
+              ))}
             </div>
           </div>
+
+          {/* Bank Details - show for bank and mixed */}
+          {(paymentMethod === 'bank' || paymentMethod === 'mixed') && (
+            <div>
+              <h3 className="text-sm font-semibold mb-3 text-primary">פרטי חשבון בנק</h3>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">מספר בנק</Label>
+                  <Input value={bankNumber} onChange={e => setBankNumber(e.target.value)} dir="ltr" placeholder="12" className="h-9" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">מספר סניף</Label>
+                  <Input value={branchNumber} onChange={e => setBranchNumber(e.target.value)} dir="ltr" placeholder="345" className="h-9" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">מספר חשבון</Label>
+                  <Input value={accountNumber} onChange={e => setAccountNumber(e.target.value)} dir="ltr" placeholder="123456789" className="h-9" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3 mt-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">שם בעל החשבון (אנגלית)</Label>
+                  <Input value={accountHolderName} onChange={e => setAccountHolderName(e.target.value)} className="h-9" dir="ltr" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">מספר אסמכתא הרשאה</Label>
+                  <Input value={authorizationRef} onChange={e => setAuthorizationRef(e.target.value)} dir="ltr" className="h-9" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">תאריך הרשאה</Label>
+                  <Input value={authorizationDate} onChange={e => setAuthorizationDate(e.target.value)} type="date" dir="ltr" className="h-9" />
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Billing Config */}
           <div>
             <h3 className="text-sm font-semibold mb-3 text-primary">הגדרות חיוב</h3>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">סכום חודשי (₪)</Label>
+                <Label className="text-xs text-muted-foreground">סכום חודשי כולל (₪)</Label>
                 <Input value={monthlyAmount || ''} onChange={e => setMonthlyAmount(Number(e.target.value) || 0)} type="number" dir="ltr" className="h-9" />
               </div>
+
+              {paymentMethod === 'mixed' && (
+                <>
+                  <div />
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">סכום דרך הבנק (₪)</Label>
+                    <Input
+                      value={bankAmount || ''}
+                      onChange={e => {
+                        const v = Number(e.target.value) || 0;
+                        setBankAmount(v);
+                        setCashAmount(monthlyAmount - v);
+                      }}
+                      type="number" dir="ltr" className="h-9"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">סכום במזומן (₪)</Label>
+                    <Input
+                      value={cashAmount || ''}
+                      onChange={e => {
+                        const v = Number(e.target.value) || 0;
+                        setCashAmount(v);
+                        setBankAmount(monthlyAmount - v);
+                      }}
+                      type="number" dir="ltr" className="h-9"
+                    />
+                    {bankAmount + cashAmount !== monthlyAmount && monthlyAmount > 0 && (
+                      <p className="text-xs text-destructive">הסכומים לא מסתכמים לסכום החודשי</p>
+                    )}
+                  </div>
+                </>
+              )}
+
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">מחזור חיוב</Label>
                 <Select value={billingCycle} onValueChange={v => setBillingCycle(v as 'monthly' | 'custom')}>

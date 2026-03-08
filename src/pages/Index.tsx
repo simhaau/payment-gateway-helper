@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { LayoutDashboard, Users, FolderKanban, CreditCard, Settings } from 'lucide-react';
+import { LayoutDashboard, Users, FolderKanban, CreditCard, Settings, Banknote } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import DashboardView from '@/components/DashboardView';
 import CustomersView from '@/components/CustomersView';
 import GroupsView from '@/components/GroupsView';
 import BillingView from '@/components/BillingView';
+import DebtsView from '@/components/DebtsView';
 import SettingsView from '@/components/SettingsView';
 import CommandPalette from '@/components/CommandPalette';
 import ThemeToggle from '@/components/ThemeToggle';
@@ -13,7 +14,8 @@ const TABS = [
   { id: 'dashboard', label: 'לוח בקרה', icon: LayoutDashboard },
   { id: 'customers', label: 'לקוחות', icon: Users },
   { id: 'groups', label: 'קבוצות', icon: FolderKanban },
-  { id: 'billing', label: 'גבייה', icon: CreditCard },
+  { id: 'billing', label: 'גבייה (בנק)', icon: CreditCard },
+  { id: 'debts', label: 'חובות (מזומן)', icon: Banknote },
   { id: 'settings', label: 'הגדרות', icon: Settings },
 ];
 
@@ -24,7 +26,6 @@ const Index = () => {
     <div className="min-h-screen bg-background" dir="rtl">
       <CommandPalette onNavigate={setActiveTab} />
       
-      {/* Header */}
       <header className="border-b border-border bg-card/80 backdrop-blur-md sticky top-0 z-50">
         <div className="container flex items-center justify-between h-14 px-4">
           <div className="flex items-center gap-3">
@@ -49,7 +50,6 @@ const Index = () => {
         </div>
       </header>
 
-      {/* Main Content */}
       <div className="container px-4 py-6">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="mb-6 bg-muted/50 p-1 h-auto flex-wrap">
@@ -65,21 +65,12 @@ const Index = () => {
             ))}
           </TabsList>
 
-          <TabsContent value="dashboard">
-            <DashboardView onNavigate={setActiveTab} />
-          </TabsContent>
-          <TabsContent value="customers">
-            <CustomersView />
-          </TabsContent>
-          <TabsContent value="groups">
-            <GroupsView />
-          </TabsContent>
-          <TabsContent value="billing">
-            <BillingView />
-          </TabsContent>
-          <TabsContent value="settings">
-            <SettingsView />
-          </TabsContent>
+          <TabsContent value="dashboard"><DashboardView onNavigate={setActiveTab} /></TabsContent>
+          <TabsContent value="customers"><CustomersView /></TabsContent>
+          <TabsContent value="groups"><GroupsView /></TabsContent>
+          <TabsContent value="billing"><BillingView /></TabsContent>
+          <TabsContent value="debts"><DebtsView /></TabsContent>
+          <TabsContent value="settings"><SettingsView /></TabsContent>
         </Tabs>
       </div>
     </div>

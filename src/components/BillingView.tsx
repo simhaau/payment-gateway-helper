@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { CreditCard, Download, FileText, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
+import { CreditCard, Download, FileText, AlertCircle, CheckCircle2, Loader2, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -21,6 +21,7 @@ export default function BillingView() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [scope, setScope] = useState('all');
   const [groupId, setGroupId] = useState('');
+  const [singleCustomerId, setSingleCustomerId] = useState('');
   const [valueDate, setValueDate] = useState(new Date().toISOString().split('T')[0]);
   const [creating, setCreating] = useState(false);
   const [viewBatch, setViewBatch] = useState<BillingBatch | null>(null);
@@ -33,10 +34,14 @@ export default function BillingView() {
 
   useEffect(() => { loadData(); }, []);
 
+  // Only bank/mixed customers are relevant for MASAV billing
+  const bankCustomers = customers.filter(c => (c.paymentMethod || 'bank') !== 'cash');
+
   const getTargetCustomers = (): Customer[] => {
-    const due = getCustomersDueForBilling(customers);
+    const due = getCustomersDueForBilling(bankCustomers);
     if (scope === 'all') return due;
     if (scope === 'group' && groupId) return due.filter(c => String(c.groupId) === groupId);
+    if (scope === 'single' && singleCustomerId) return due.filter(c => String(c.id) === singleCustomerId);
     return due;
   };
 
@@ -44,12 +49,9 @@ export default function BillingView() {
     setCreating(true);
     try {
       const targets = getTargetCustomers();
-      if (targets.length === 0) {
-        toast.error('אין לקוחות לגבייה');
-        return;
-      }
+      if (targets.length === 0) { toast.error('אין לקוחות לגבייה'); return; }
       const batch = createBillingBatch(targets, valueDate);
-      const id = await addBatch(batch);
+      await addBatch(batch);
       toast.success(`אצוות גבייה נוצרה: ${batch.transactionCount} פעולות, ₪${batch.totalAmount.toLocaleString()}`);
       loadData();
     } catch (e) {
@@ -70,22 +72,21 @@ export default function BillingView() {
     const content = generateMasavFile(batch, settings);
     const filename = `masav_${batch.date}_${batch.id}.msv`;
     downloadMasavFile(content, filename);
-    // Update batch status
     updateBatch({ ...batch, status: 'exported' });
     toast.success('קובץ מסב יוצא בהצלחה');
     loadData();
   };
 
   const targetCount = getTargetCustomers().length;
+  const displayName = (c: Customer) => c.nickname || c.fullName;
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Create Batch */}
       <Card className="glass-card">
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
             <CreditCard className="h-5 w-5 text-primary" />
-            יצירת אצוות גבייה
+            יצירת אצוות גבייה (בנק)
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -97,6 +98,7 @@ export default function BillingView() {
                 <SelectContent>
                   <SelectItem value="all">כל הלקוחות הפעילים</SelectItem>
                   <SelectItem value="group">לפי קבוצה</SelectItem>
+                  <SelectItem value="single">לקוח בודד</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -107,6 +109,21 @@ export default function BillingView() {
                   <SelectTrigger><SelectValue placeholder="בחר קבוצה" /></SelectTrigger>
                   <SelectContent>
                     {groups.map(g => <SelectItem key={g.id} value={String(g.id)}>{g.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            {scope === 'single' && (
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">לקוח</Label>
+                <Select value={singleCustomerId} onValueChange={setSingleCustomerId}>
+                  <SelectTrigger><SelectValue placeholder="בחר לקוח" /></SelectTrigger>
+                  <SelectContent>
+                    {bankCustomers.filter(c => c.status === 'active').map(c => (
+                      <SelectItem key={c.id} value={String(c.id)}>
+                        {displayName(c)}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -150,10 +167,7 @@ export default function BillingView() {
                           {b.status === 'pending' ? 'ממתין' : b.status === 'generated' ? 'נוצר' : 'יוצא'}
                         </Badge>
                         {errorCount > 0 && (
-                          <Badge variant="destructive" className="gap-1">
-                            <AlertCircle className="h-3 w-3" />
-                            {errorCount} שגיאות
-                          </Badge>
+                          <Badge variant="destructive" className="gap-1"><AlertCircle className="h-3 w-3" />{errorCount} שגיאות</Badge>
                         )}
                       </div>
                       <div className="flex items-center gap-4">
@@ -162,14 +176,8 @@ export default function BillingView() {
                           <p className="text-success font-semibold">₪{b.totalAmount.toLocaleString()}</p>
                         </div>
                         <div className="flex gap-2">
-                          <Button size="sm" variant="outline" onClick={() => setViewBatch(b)}>
-                            <FileText className="h-3.5 w-3.5 ml-1" />
-                            פרטים
-                          </Button>
-                          <Button size="sm" onClick={() => handleExportMasav(b)}>
-                            <Download className="h-3.5 w-3.5 ml-1" />
-                            קובץ מסב
-                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => setViewBatch(b)}><FileText className="h-3.5 w-3.5 ml-1" />פרטים</Button>
+                          <Button size="sm" onClick={() => handleExportMasav(b)}><Download className="h-3.5 w-3.5 ml-1" />קובץ מסב</Button>
                         </div>
                       </div>
                     </div>
@@ -187,9 +195,7 @@ export default function BillingView() {
           <AlertDialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
             <AlertDialogHeader>
               <AlertDialogTitle>פרטי אצוות #{viewBatch.id}</AlertDialogTitle>
-              <AlertDialogDescription>
-                {viewBatch.transactionCount} פעולות • ₪{viewBatch.totalAmount.toLocaleString()}
-              </AlertDialogDescription>
+              <AlertDialogDescription>{viewBatch.transactionCount} פעולות • ₪{viewBatch.totalAmount.toLocaleString()}</AlertDialogDescription>
             </AlertDialogHeader>
             <Table>
               <TableHeader>
@@ -211,13 +217,8 @@ export default function BillingView() {
                     <TableCell className="font-mono" dir="ltr">{t.accountNumber}</TableCell>
                     <TableCell className="text-success">₪{t.amount.toLocaleString()}</TableCell>
                     <TableCell>
-                      {t.status === 'included' ? (
-                        <CheckCircle2 className="h-4 w-4 text-success" />
-                      ) : (
-                        <span className="text-destructive text-xs flex items-center gap-1">
-                          <AlertCircle className="h-3.5 w-3.5" />
-                          {t.errorMessage}
-                        </span>
+                      {t.status === 'included' ? <CheckCircle2 className="h-4 w-4 text-success" /> : (
+                        <span className="text-destructive text-xs flex items-center gap-1"><AlertCircle className="h-3.5 w-3.5" />{t.errorMessage}</span>
                       )}
                     </TableCell>
                   </TableRow>
@@ -227,15 +228,13 @@ export default function BillingView() {
             <AlertDialogFooter>
               <AlertDialogCancel>סגור</AlertDialogCancel>
               <AlertDialogAction onClick={() => { handleExportMasav(viewBatch); setViewBatch(null); }}>
-                <Download className="h-4 w-4 ml-1" />
-                ייצא קובץ מסב
+                <Download className="h-4 w-4 ml-1" />ייצא קובץ מסב
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
       )}
 
-      {/* Confirm Create */}
       <AlertDialog open={confirmCreate} onOpenChange={setConfirmCreate}>
         <AlertDialogContent>
           <AlertDialogHeader>

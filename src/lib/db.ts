@@ -1,7 +1,7 @@
-import { Customer, Group, BillingBatch, Settings, DEFAULT_SETTINGS } from './types';
+import { Customer, Group, BillingBatch, Settings, DebtRecord, DEFAULT_SETTINGS } from './types';
 
 const DB_NAME = 'masav_collection_system';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const BACKUP_KEY = 'masav_backup';
 
 let dbInstance: IDBDatabase | null = null;
@@ -32,6 +32,12 @@ function openDB(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains('settings')) {
         db.createObjectStore('settings', { keyPath: 'id' });
       }
+      if (!db.objectStoreNames.contains('debts')) {
+        const ds = db.createObjectStore('debts', { keyPath: 'id', autoIncrement: true });
+        ds.createIndex('customerId', 'customerId');
+        ds.createIndex('month', 'month');
+        ds.createIndex('status', 'status');
+      }
     };
   });
 }
@@ -47,64 +53,42 @@ function reqToPromise<T>(req: IDBRequest<T>): Promise<T> {
   });
 }
 
-// Auto-backup to localStorage after every write operation
 let backupTimeout: ReturnType<typeof setTimeout> | null = null;
 function scheduleBackup() {
   if (backupTimeout) clearTimeout(backupTimeout);
   backupTimeout = setTimeout(async () => {
     try {
-      const [customers, groups, batches, settings] = await Promise.all([
-        getAllCustomers(), getAllGroups(), getAllBatches(), getSettings()
+      const [customers, groups, batches, settings, debts] = await Promise.all([
+        getAllCustomers(), getAllGroups(), getAllBatches(), getSettings(), getAllDebts()
       ]);
-      const backup = JSON.stringify({ customers, groups, batches, settings, backupDate: new Date().toISOString() });
+      const backup = JSON.stringify({ customers, groups, batches, settings, debts, backupDate: new Date().toISOString() });
       localStorage.setItem(BACKUP_KEY, backup);
     } catch (e) {
       console.warn('Auto-backup failed:', e);
     }
-  }, 500); // debounce 500ms
+  }, 500);
 }
 
-// Restore from localStorage backup if IndexedDB is empty
 export async function restoreFromBackupIfNeeded(): Promise<boolean> {
   try {
     const customers = await getAllCustomers();
-    if (customers.length > 0) return false; // DB has data, no need to restore
-    
+    if (customers.length > 0) return false;
     const backupStr = localStorage.getItem(BACKUP_KEY);
     if (!backupStr) return false;
-    
     const backup = JSON.parse(backupStr);
     if (!backup.customers?.length && !backup.groups?.length) return false;
     
-    // Restore groups first (customers reference them)
-    if (backup.groups?.length) {
-      const db = await openDB();
-      const tx = db.transaction('groups', 'readwrite');
-      const store = tx.objectStore('groups');
-      for (const g of backup.groups) store.put(g);
-      await new Promise<void>((res, rej) => { tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); });
+    const db = await openDB();
+    for (const storeName of ['groups', 'customers', 'batches', 'debts']) {
+      const data = backup[storeName === 'batches' ? 'batches' : storeName];
+      if (data?.length) {
+        const tx = db.transaction(storeName, 'readwrite');
+        const store = tx.objectStore(storeName);
+        for (const item of data) store.put(item);
+        await new Promise<void>((res, rej) => { tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); });
+      }
     }
-    
-    if (backup.customers?.length) {
-      const db = await openDB();
-      const tx = db.transaction('customers', 'readwrite');
-      const store = tx.objectStore('customers');
-      for (const c of backup.customers) store.put(c);
-      await new Promise<void>((res, rej) => { tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); });
-    }
-    
-    if (backup.batches?.length) {
-      const db = await openDB();
-      const tx = db.transaction('batches', 'readwrite');
-      const store = tx.objectStore('batches');
-      for (const b of backup.batches) store.put(b);
-      await new Promise<void>((res, rej) => { tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); });
-    }
-    
-    if (backup.settings) {
-      await saveSettings(backup.settings);
-    }
-    
+    if (backup.settings) await saveSettings(backup.settings);
     console.log('Data restored from backup:', backup.backupDate);
     return true;
   } catch (e) {
@@ -113,41 +97,20 @@ export async function restoreFromBackupIfNeeded(): Promise<boolean> {
   }
 }
 
-// Import data from JSON backup file
 export async function importData(jsonString: string): Promise<void> {
   const data = JSON.parse(jsonString);
-  
-  if (data.groups?.length) {
-    const db = await openDB();
-    const tx = db.transaction('groups', 'readwrite');
-    const store = tx.objectStore('groups');
-    store.clear();
-    for (const g of data.groups) store.put(g);
-    await new Promise<void>((res, rej) => { tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); });
+  const db = await openDB();
+  for (const storeName of ['groups', 'customers', 'batches', 'debts']) {
+    const items = data[storeName];
+    if (items?.length) {
+      const tx = db.transaction(storeName, 'readwrite');
+      const store = tx.objectStore(storeName);
+      store.clear();
+      for (const item of items) store.put(item);
+      await new Promise<void>((res, rej) => { tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); });
+    }
   }
-  
-  if (data.customers?.length) {
-    const db = await openDB();
-    const tx = db.transaction('customers', 'readwrite');
-    const store = tx.objectStore('customers');
-    store.clear();
-    for (const c of data.customers) store.put(c);
-    await new Promise<void>((res, rej) => { tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); });
-  }
-  
-  if (data.batches?.length) {
-    const db = await openDB();
-    const tx = db.transaction('batches', 'readwrite');
-    const store = tx.objectStore('batches');
-    store.clear();
-    for (const b of data.batches) store.put(b);
-    await new Promise<void>((res, rej) => { tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); });
-  }
-  
-  if (data.settings) {
-    await saveSettings(data.settings);
-  }
-  
+  if (data.settings) await saveSettings(data.settings);
   scheduleBackup();
 }
 
@@ -156,40 +119,32 @@ export async function getAllCustomers(): Promise<Customer[]> {
   const store = await txStore('customers', 'readonly');
   return reqToPromise(store.getAll());
 }
-
 export async function getCustomer(id: number): Promise<Customer | undefined> {
   const store = await txStore('customers', 'readonly');
   return reqToPromise(store.get(id));
 }
-
 export async function addCustomer(c: Omit<Customer, 'id'>): Promise<number> {
   const store = await txStore('customers', 'readwrite');
   const id = (await reqToPromise(store.add(c))) as number;
   scheduleBackup();
   return id;
 }
-
 export async function updateCustomer(c: Customer): Promise<void> {
   const store = await txStore('customers', 'readwrite');
   await reqToPromise(store.put(c));
   scheduleBackup();
 }
-
 export async function deleteCustomer(id: number): Promise<void> {
   const store = await txStore('customers', 'readwrite');
   await reqToPromise(store.delete(id));
   scheduleBackup();
 }
-
 export async function bulkUpdateCustomers(customers: Customer[]): Promise<void> {
   const db = await openDB();
   const tx = db.transaction('customers', 'readwrite');
   const store = tx.objectStore('customers');
   for (const c of customers) store.put(c);
-  await new Promise<void>((resolve, reject) => {
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
+  await new Promise<void>((resolve, reject) => { tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error); });
   scheduleBackup();
 }
 
@@ -198,20 +153,17 @@ export async function getAllGroups(): Promise<Group[]> {
   const store = await txStore('groups', 'readonly');
   return reqToPromise(store.getAll());
 }
-
 export async function addGroup(g: Omit<Group, 'id'>): Promise<number> {
   const store = await txStore('groups', 'readwrite');
   const id = (await reqToPromise(store.add(g))) as number;
   scheduleBackup();
   return id;
 }
-
 export async function updateGroup(g: Group): Promise<void> {
   const store = await txStore('groups', 'readwrite');
   await reqToPromise(store.put(g));
   scheduleBackup();
 }
-
 export async function deleteGroup(id: number): Promise<void> {
   const store = await txStore('groups', 'readwrite');
   await reqToPromise(store.delete(id));
@@ -223,22 +175,46 @@ export async function getAllBatches(): Promise<BillingBatch[]> {
   const store = await txStore('batches', 'readonly');
   return reqToPromise(store.getAll());
 }
-
 export async function addBatch(b: Omit<BillingBatch, 'id'>): Promise<number> {
   const store = await txStore('batches', 'readwrite');
   const id = (await reqToPromise(store.add(b))) as number;
   scheduleBackup();
   return id;
 }
-
 export async function updateBatch(b: BillingBatch): Promise<void> {
   const store = await txStore('batches', 'readwrite');
   await reqToPromise(store.put(b));
   scheduleBackup();
 }
-
 export async function deleteBatch(id: number): Promise<void> {
   const store = await txStore('batches', 'readwrite');
+  await reqToPromise(store.delete(id));
+  scheduleBackup();
+}
+
+// DEBTS
+export async function getAllDebts(): Promise<DebtRecord[]> {
+  const store = await txStore('debts', 'readonly');
+  return reqToPromise(store.getAll());
+}
+export async function getDebtsByCustomer(customerId: number): Promise<DebtRecord[]> {
+  const store = await txStore('debts', 'readonly');
+  const index = store.index('customerId');
+  return reqToPromise(index.getAll(customerId));
+}
+export async function addDebt(d: Omit<DebtRecord, 'id'>): Promise<number> {
+  const store = await txStore('debts', 'readwrite');
+  const id = (await reqToPromise(store.add(d))) as number;
+  scheduleBackup();
+  return id;
+}
+export async function updateDebt(d: DebtRecord): Promise<void> {
+  const store = await txStore('debts', 'readwrite');
+  await reqToPromise(store.put(d));
+  scheduleBackup();
+}
+export async function deleteDebt(id: number): Promise<void> {
+  const store = await txStore('debts', 'readwrite');
   await reqToPromise(store.delete(id));
   scheduleBackup();
 }
@@ -249,7 +225,6 @@ export async function getSettings(): Promise<Settings> {
   const s = await reqToPromise(store.get(1));
   return s || DEFAULT_SETTINGS;
 }
-
 export async function saveSettings(s: Settings): Promise<void> {
   const store = await txStore('settings', 'readwrite');
   await reqToPromise(store.put({ ...s, id: 1 }));
@@ -258,8 +233,8 @@ export async function saveSettings(s: Settings): Promise<void> {
 
 // EXPORT DATA
 export async function exportAllData(): Promise<string> {
-  const [customers, groups, batches, settings] = await Promise.all([
-    getAllCustomers(), getAllGroups(), getAllBatches(), getSettings()
+  const [customers, groups, batches, settings, debts] = await Promise.all([
+    getAllCustomers(), getAllGroups(), getAllBatches(), getSettings(), getAllDebts()
   ]);
-  return JSON.stringify({ customers, groups, batches, settings }, null, 2);
+  return JSON.stringify({ customers, groups, batches, settings, debts }, null, 2);
 }
