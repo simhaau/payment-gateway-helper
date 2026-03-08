@@ -286,10 +286,6 @@ export default function DebtsView() {
     loadData();
   };
 
-  const bankCustomers = useMemo(() =>
-    customers.filter(c => c.status === 'active' && (c.paymentMethod === 'bank' || c.paymentMethod === 'mixed')),
-    [customers]
-  );
 
   const getStatusBadge = (status: string) => {
     switch (status) {
