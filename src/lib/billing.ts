@@ -46,7 +46,8 @@ export function createBillingBatch(
     const customerExtras = (extraDebts || []).filter(d => 
       d.customerId === c.id! && 
       d.status !== 'paid' && 
-      d.status !== 'advance'
+      d.status !== 'advance' &&
+      d.status !== 'suspended'
     );
     const extraAmount = customerExtras.reduce((s, d) => s + (d.amount - d.paidAmount), 0);
     const totalAmount = (baseAmount * monthCount) + extraAmount;

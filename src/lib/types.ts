@@ -44,7 +44,7 @@ export interface DebtRecord {
   month: string; // YYYY-MM
   amount: number;
   paidAmount: number;
-  status: 'unpaid' | 'partial' | 'paid' | 'advance';
+  status: 'unpaid' | 'partial' | 'paid' | 'advance' | 'suspended';
   paidDate: string;
   notes: string;
   createdAt: string;
