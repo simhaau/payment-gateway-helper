@@ -99,7 +99,7 @@ export function generateMasavFile(batch: BillingBatch, settings: Settings): stri
     line += padRight(String(tx.idNumber).replace(/\D/g, ''), 20);    // Pos 75-94 (20) Reference
     line += '00000000';                              // Pos 95-102(8)  Payment period
     line += '000';                                   // Pos 103-105(3) Text code
-    line += '002';                                   // Pos 106-108(3) Movement type (002=debit)
+    line += '001';                                   // Pos 106-108(3) Movement type (001=credit/authorized collection format)
     line += padLeft('', 18);                         // Pos 109-126(18) Filler (zeros)
     line += '  ';                                    // Pos 127-128(2) Filler (blanks)
     ensureRecordLength(line, 'movement');
