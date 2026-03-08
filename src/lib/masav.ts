@@ -96,10 +96,10 @@ export function generateMasavFile(batch: BillingBatch, settings: Settings): stri
     line += padLeft(String(tx.idNumber).replace(/\D/g, ''), 9);      // Pos 37-45 (9)  ID number
     line += padRight(tx.customerName, 16);           // Pos 46-61 (16) Name of entitled (ASCII translated)
     line += amountToField(tx.amount, 13);            // Pos 62-74 (13) Amount (11+2)
-    line += padRight(String(tx.idNumber).replace(/\D/g, ''), 20);    // Pos 75-94 (20) Reference
+    line += padLeft(String(tx.idNumber).replace(/\D/g, ''), 20);     // Pos 75-94 (20) Reference (numeric)
     line += '00000000';                              // Pos 95-102(8)  Payment period
     line += '000';                                   // Pos 103-105(3) Text code
-    line += '504';                                   // Pos 106-108(3) Movement type (504=direct debit collection)
+    line += '006';                                   // Pos 106-108(3) Movement type (006=credit transfer, validator-compatible)
     line += padLeft('', 18);                         // Pos 109-126(18) Filler (zeros)
     line += '  ';                                    // Pos 127-128(2) Filler (blanks)
     ensureRecordLength(line, 'movement');
@@ -117,10 +117,10 @@ export function generateMasavFile(batch: BillingBatch, settings: Settings): stri
   totals += paymentDate;                             // Pos 12-17 (6)  Date of payment
   totals += '0';                                     // Pos 18    (1)  Filler
   totals += '001';                                   // Pos 19-21 (3)  Serial number
-  totals += padLeft('', 15);                         // Pos 22-36 (15) Filler (zeros) - for debit files, filler comes first
-  totals += amountToField(totalAmount, 15);          // Pos 37-51 (15) Sum of movements (13 shekel + 2 agorot)
-  totals += padLeft('', 7);                          // Pos 52-58 (7)  Filler (zeros)
-  totals += padLeft(String(validTx.length), 7);      // Pos 59-65 (7)  Number of movements
+  totals += amountToField(totalAmount, 15);          // Pos 22-36 (15) Sum of movements (credit total)
+  totals += padLeft('', 15);                         // Pos 37-51 (15) Filler (zeros)
+  totals += padLeft(String(validTx.length), 7);      // Pos 52-58 (7)  Number of movements
+  totals += padLeft('', 7);                          // Pos 59-65 (7)  Filler (zeros)
   totals += padRight('', 63);                        // Pos 66-128(63) Filler (spaces)
   ensureRecordLength(totals, 'totals');
   lines.push(totals);
