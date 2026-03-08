@@ -234,7 +234,7 @@ export default function CustomersView() {
                 <TableRow key={c.id} className="hover:bg-muted/30 transition-colors">
                   <TableCell><Checkbox checked={selected.has(c.id!)} onCheckedChange={() => toggleSelect(c.id!)} /></TableCell>
                   <TableCell>
-                    <div>
+                    <div className="cursor-pointer hover:text-primary transition-colors" onClick={() => setViewingCustomer(c)}>
                       <span className="font-medium">{displayName(c)}</span>
                       {c.nickname && <span className="text-xs text-muted-foreground block" dir="ltr">{c.fullName}</span>}
                     </div>
