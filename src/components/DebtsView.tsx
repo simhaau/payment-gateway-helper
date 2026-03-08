@@ -232,6 +232,77 @@ export default function DebtsView() {
     loadData();
   };
 
+  const handleDeleteDebt = async () => {
+    if (!deleteTarget?.id) return;
+    await deleteDebt(deleteTarget.id);
+    toast.success('החיוב נמחק');
+    setDeleteTarget(null);
+    loadData();
+  };
+
+  const handleExtraCharge = async () => {
+    if (!extraChargeCustomerId || extraChargeAmount <= 0) return;
+    const cust = customers.find(c => c.id === Number(extraChargeCustomerId));
+    if (!cust) return;
+    const now = new Date();
+    const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    await addDebt({
+      customerId: cust.id!,
+      customerName: cust.nickname || cust.fullName,
+      month,
+      amount: extraChargeAmount,
+      paidAmount: 0,
+      status: 'unpaid',
+      paidDate: '',
+      notes: extraChargeNotes || 'חיוב נוסף',
+      createdAt: now.toISOString(),
+    });
+    toast.success(`חיוב נוסף של ₪${extraChargeAmount.toLocaleString()} נוצר ל${cust.nickname || cust.fullName}`);
+    setExtraChargeDialog(false);
+    setExtraChargeCustomerId('');
+    setExtraChargeAmount(0);
+    setExtraChargeNotes('');
+    loadData();
+  };
+
+  const handleCashOverride = async () => {
+    if (!cashOverrideCustomerId) return;
+    const cust = customers.find(c => c.id === Number(cashOverrideCustomerId));
+    if (!cust) return;
+    if (cust.paymentMethod !== 'bank' && cust.paymentMethod !== 'mixed') {
+      toast.error('לקוח זה כבר משלם במזומן');
+      return;
+    }
+    const amount = cust.paymentMethod === 'mixed' ? cust.bankAmount : cust.monthlyAmount;
+    if (amount <= 0) { toast.error('לא הוגדר סכום חודשי'); return; }
+    const existing = debts.find(d => d.customerId === cust.id && d.month === cashOverrideMonth);
+    if (existing) {
+      toast.error('כבר קיים חיוב לחודש זה ללקוח');
+      return;
+    }
+    const now = new Date();
+    await addDebt({
+      customerId: cust.id!,
+      customerName: cust.nickname || cust.fullName,
+      month: cashOverrideMonth,
+      amount,
+      paidAmount: 0,
+      status: 'unpaid',
+      paidDate: '',
+      notes: 'תשלום במזומן במקום בנק',
+      createdAt: now.toISOString(),
+    });
+    toast.success(`חיוב מזומן של ₪${amount.toLocaleString()} נוצר ל${cust.nickname || cust.fullName}`);
+    setCashOverrideDialog(false);
+    setCashOverrideCustomerId('');
+    loadData();
+  };
+
+  const bankCustomers = useMemo(() =>
+    customers.filter(c => c.status === 'active' && (c.paymentMethod === 'bank' || c.paymentMethod === 'mixed')),
+    [customers]
+  );
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'paid': return <Badge className="bg-success/15 text-success border-success/30">שולם</Badge>;
