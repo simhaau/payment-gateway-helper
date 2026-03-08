@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Plus, Search, Trash2, Edit, Copy, Users, Download, Filter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,7 +10,6 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { getAllCustomers, deleteCustomer, addCustomer, getAllGroups, bulkUpdateCustomers } from '@/lib/db';
 import CustomerDialog from './CustomerDialog';
 import type { Customer, Group } from '@/lib/types';
-import { EMPTY_CUSTOMER } from '@/lib/types';
 import { toast } from 'sonner';
 
 const PAGE_SIZE = 50;
@@ -35,12 +34,13 @@ export default function CustomersView() {
   const [bulkGroupDialogOpen, setBulkGroupDialogOpen] = useState(false);
   const [bulkGroupId, setBulkGroupId] = useState<string>('');
 
-  const loadData = useCallback(() => {
+  const loadData = () => {
     Promise.all([getAllCustomers(), getAllGroups()])
       .then(([c, g]) => { setCustomers(c); setGroups(g); });
-  }, []);
+  };
 
-  useEffect(() => { loadData(); }, [loadData]);
+  // Load once on mount
+  useEffect(() => { loadData(); }, []);
 
   const filtered = useMemo(() => {
     let result = customers;
@@ -100,6 +100,20 @@ export default function CustomersView() {
     loadData();
   };
 
+  const handleDialogSaved = () => {
+    loadData();
+  };
+
+  const openNewCustomer = () => {
+    setEditingCustomer(null);
+    setDialogOpen(true);
+  };
+
+  const openEditCustomer = (c: Customer) => {
+    setEditingCustomer(c);
+    setDialogOpen(true);
+  };
+
   const exportCSV = () => {
     const headers = ['שם', 'ת.ז', 'טלפון', 'אימייל', 'בנק', 'סניף', 'חשבון', 'סכום', 'סטטוס'];
     const rows = filtered.map(c => [c.fullName, c.idNumber, c.phone, c.email, c.bankNumber, c.branchNumber, c.accountNumber, c.monthlyAmount, STATUS_MAP[c.status]?.label || c.status]);
@@ -151,7 +165,7 @@ export default function CustomersView() {
             {groups.map(g => <SelectItem key={g.id} value={String(g.id)}>{g.name}</SelectItem>)}
           </SelectContent>
         </Select>
-        <Button onClick={() => { setEditingCustomer(null); setDialogOpen(true); }}>
+        <Button onClick={openNewCustomer}>
           <Plus className="h-4 w-4 ml-1" />
           לקוח חדש
         </Button>
@@ -180,7 +194,7 @@ export default function CustomersView() {
       </div>
 
       {/* Table */}
-      <div className="rounded-lg border border-border overflow-hidden">
+      <div className="rounded-lg border border-border overflow-hidden bg-card">
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/50">
@@ -222,7 +236,7 @@ export default function CustomersView() {
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center gap-1">
-                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setEditingCustomer(c); setDialogOpen(true); }}>
+                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEditCustomer(c)}>
                       <Edit className="h-3.5 w-3.5" />
                     </Button>
                     <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleDuplicate(c)}>
@@ -261,7 +275,7 @@ export default function CustomersView() {
         onOpenChange={setDialogOpen}
         customer={editingCustomer}
         groups={groups}
-        onSaved={loadData}
+        onSaved={handleDialogSaved}
       />
 
       {/* Delete Confirm */}
@@ -283,6 +297,7 @@ export default function CustomersView() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>שיוך {selected.size} לקוחות לקבוצה</AlertDialogTitle>
+            <AlertDialogDescription>בחר קבוצה לשיוך הלקוחות הנבחרים</AlertDialogDescription>
           </AlertDialogHeader>
           <Select value={bulkGroupId} onValueChange={setBulkGroupId}>
             <SelectTrigger>

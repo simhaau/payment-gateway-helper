@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { useState, useRef } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -19,21 +19,32 @@ interface Props {
 }
 
 export default function CustomerDialog({ open, onOpenChange, customer, groups, onSaved }: Props) {
-  const [form, setForm] = useState<Record<string, any>>(EMPTY_CUSTOMER);
+  const [form, setForm] = useState<Record<string, any>>({});
+  const initializedRef = useRef(false);
+  const lastCustomerIdRef = useRef<number | null | undefined>(undefined);
+
+  // Initialize form only when dialog opens or customer changes - no useEffect to avoid loops
+  if (open && (!initializedRef.current || lastCustomerIdRef.current !== customer?.id)) {
+    initializedRef.current = true;
+    lastCustomerIdRef.current = customer?.id ?? null;
+    if (customer) {
+      // Use setTimeout to avoid setState during render
+      setTimeout(() => setForm({ ...customer }), 0);
+    } else {
+      setTimeout(() => setForm({ ...EMPTY_CUSTOMER, startDate: new Date().toISOString().split('T')[0] }), 0);
+    }
+  }
+  if (!open && initializedRef.current) {
+    initializedRef.current = false;
+  }
+
   const isEdit = !!customer;
-
-  useEffect(() => {
-    if (customer) setForm(customer);
-    else setForm({ ...EMPTY_CUSTOMER, startDate: new Date().toISOString().split('T')[0] });
-  }, [customer, open]);
-
   const set = (field: string, value: any) => setForm(prev => ({ ...prev, [field]: value }));
 
   const handleSave = async () => {
     if (!form.fullName?.trim()) { toast.error('שם הלקוח חובה'); return; }
-
     const now = new Date().toISOString();
-    if (isEdit) {
+    if (isEdit && customer) {
       await updateCustomer({ ...customer, ...form, updatedAt: now } as Customer);
       toast.success('הלקוח עודכן');
     } else {
@@ -49,7 +60,7 @@ export default function CustomerDialog({ open, onOpenChange, customer, groups, o
       <Label className="text-xs text-muted-foreground">{label}</Label>
       <Input
         type={type}
-        value={form[field] || ''}
+        value={form[field] ?? ''}
         onChange={e => set(field, type === 'number' ? Number(e.target.value) : e.target.value)}
         dir={dir}
         placeholder={placeholder}
@@ -60,9 +71,10 @@ export default function CustomerDialog({ open, onOpenChange, customer, groups, o
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto" onPointerDownOutside={e => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>{isEdit ? 'עריכת לקוח' : 'לקוח חדש'}</DialogTitle>
+          <DialogDescription>{isEdit ? 'ערוך את פרטי הלקוח' : 'הזן את פרטי הלקוח החדש'}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6">
