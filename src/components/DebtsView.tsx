@@ -40,6 +40,11 @@ export default function DebtsView() {
   const [extraChargeCustomerId, setExtraChargeCustomerId] = useState('');
   const [extraChargeAmperes, setExtraChargeAmperes] = useState(0);
   const [extraChargeNotes, setExtraChargeNotes] = useState('');
+  // Extra money charge dialog
+  const [moneyChargeDialog, setMoneyChargeDialog] = useState(false);
+  const [moneyChargeCustomerId, setMoneyChargeCustomerId] = useState('');
+  const [moneyChargeAmount, setMoneyChargeAmount] = useState(0);
+  const [moneyChargeNotes, setMoneyChargeNotes] = useState('');
   // Cash payment dialog (pay any customer's debt in cash)
   const [cashPayDialog, setCashPayDialog] = useState(false);
   const [cashPayCustomerId, setCashPayCustomerId] = useState('');
