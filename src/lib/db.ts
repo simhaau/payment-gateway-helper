@@ -164,17 +164,21 @@ export async function getCustomer(id: number): Promise<Customer | undefined> {
 
 export async function addCustomer(c: Omit<Customer, 'id'>): Promise<number> {
   const store = await txStore('customers', 'readwrite');
-  return reqToPromise(store.add(c)) as Promise<number>;
+  const id = await reqToPromise(store.add(c)) as Promise<number>;
+  scheduleBackup();
+  return id;
 }
 
 export async function updateCustomer(c: Customer): Promise<void> {
   const store = await txStore('customers', 'readwrite');
   await reqToPromise(store.put(c));
+  scheduleBackup();
 }
 
 export async function deleteCustomer(id: number): Promise<void> {
   const store = await txStore('customers', 'readwrite');
   await reqToPromise(store.delete(id));
+  scheduleBackup();
 }
 
 export async function bulkUpdateCustomers(customers: Customer[]): Promise<void> {
@@ -182,10 +186,11 @@ export async function bulkUpdateCustomers(customers: Customer[]): Promise<void> 
   const tx = db.transaction('customers', 'readwrite');
   const store = tx.objectStore('customers');
   for (const c of customers) store.put(c);
-  return new Promise((resolve, reject) => {
+  await new Promise<void>((resolve, reject) => {
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
+  scheduleBackup();
 }
 
 // GROUPS
