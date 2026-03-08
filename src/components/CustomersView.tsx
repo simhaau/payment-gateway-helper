@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Plus, Search, Trash2, Edit, Copy, Users, Download, Filter } from 'lucide-react';
+import { Plus, Search, Trash2, Edit, Copy, Users, Download, Filter, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { getAllCustomers, deleteCustomer, addCustomer, getAllGroups, bulkUpdateCustomers } from '@/lib/db';
+import { parseCSVCustomers } from '@/lib/csvImport';
 import CustomerDialog from './CustomerDialog';
 import type { Customer, Group } from '@/lib/types';
 import { toast } from 'sonner';
@@ -125,6 +126,35 @@ export default function CustomersView() {
     a.click();
   };
 
+  const handleImportCSV = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.csv,.txt';
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const parsed = parseCSVCustomers(text);
+        if (parsed.length === 0) {
+          toast.error('לא נמצאו לקוחות בקובץ');
+          return;
+        }
+        const now = new Date().toISOString();
+        let added = 0;
+        for (const c of parsed) {
+          await addCustomer({ ...c, createdAt: now, updatedAt: now });
+          added++;
+        }
+        toast.success(`${added} לקוחות יובאו בהצלחה`);
+        loadData();
+      } catch (err) {
+        toast.error('שגיאה בייבוא הקובץ');
+      }
+    };
+    input.click();
+  };
+
   const groupName = (gid: number | null) => {
     if (!gid) return '';
     return groups.find(g => g.id === gid)?.name || '';
@@ -172,6 +202,10 @@ export default function CustomersView() {
         <Button variant="secondary" onClick={exportCSV}>
           <Download className="h-4 w-4 ml-1" />
           ייצוא
+        </Button>
+        <Button variant="secondary" onClick={handleImportCSV}>
+          <Upload className="h-4 w-4 ml-1" />
+          ייבוא CSV
         </Button>
       </div>
 

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { getAllCustomers, getAllBatches, getAllGroups } from '@/lib/db';
 import { calculateExpectedMonthlyIncome, getCustomersDueForBilling } from '@/lib/billing';
+import DashboardCharts from './DashboardCharts';
 import type { Customer, BillingBatch, Group } from '@/lib/types';
 
 interface DashboardViewProps {
@@ -25,12 +26,13 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
   const expectedIncome = useMemo(() => calculateExpectedMonthlyIncome(customers), [customers]);
   const dueCustomers = useMemo(() => getCustomersDueForBilling(customers), [customers]);
   const lastBatch = useMemo(() => batches.sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0], [batches]);
+  const pausedCount = useMemo(() => customers.filter(c => c.status === 'paused').length, [customers]);
 
   const stats = [
     { label: 'סה"כ לקוחות', value: customers.length, icon: Users, color: 'text-primary' },
     { label: 'לקוחות פעילים', value: activeCustomers.length, icon: Zap, color: 'text-success' },
     { label: 'הכנסה חודשית צפויה', value: `₪${expectedIncome.toLocaleString()}`, icon: TrendingUp, color: 'text-success' },
-    { label: 'קבוצות', value: groups.length, icon: Calendar, color: 'text-info' },
+    { label: 'מושהים', value: pausedCount, icon: Calendar, color: 'text-warning' },
   ];
 
   return (
@@ -38,7 +40,7 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((stat, i) => (
-          <Card key={i} className="glass-card stat-glow">
+          <Card key={i} className="glass-card stat-glow hover:shadow-md transition-shadow cursor-default">
             <CardContent className="p-5">
               <div className="flex items-center justify-between">
                 <div>
@@ -52,9 +54,11 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
         ))}
       </div>
 
+      {/* Charts */}
+      <DashboardCharts customers={customers} groups={groups} batches={batches} />
+
       {/* Quick Actions + Due Customers */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Quick Actions */}
         <Card className="glass-card">
           <CardHeader>
             <CardTitle className="text-lg">פעולות מהירות</CardTitle>
@@ -75,7 +79,6 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
           </CardContent>
         </Card>
 
-        {/* Due Customers */}
         <Card className="glass-card">
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
@@ -110,7 +113,6 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
         </Card>
       </div>
 
-      {/* Last Batch */}
       {lastBatch && (
         <Card className="glass-card">
           <CardHeader>
