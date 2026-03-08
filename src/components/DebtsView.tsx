@@ -472,7 +472,7 @@ export default function DebtsView() {
         <DialogContent onPointerDownOutside={e => e.preventDefault()}>
           <DialogHeader>
             <DialogTitle>תשלום מראש</DialogTitle>
-            <DialogDescription>שלם עבור חודשים עתידיים</DialogDescription>
+            <DialogDescription>שלם סכום חופשי או לפי חודשים — המערכת תחשב אוטומטית</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
@@ -480,33 +480,100 @@ export default function DebtsView() {
               <Select value={advanceCustomerId} onValueChange={v => {
                 setAdvanceCustomerId(v);
                 const c = cashCustomers.find(c => c.id === Number(v));
-                if (c) setAdvanceAmount(c.paymentMethod === 'mixed' ? c.cashAmount : c.monthlyAmount);
+                if (c) {
+                  const amt = c.paymentMethod === 'mixed' ? c.cashAmount : c.monthlyAmount;
+                  setAdvanceAmount(amt);
+                  if (advanceMode === 'months') setAdvanceTotalAmount(amt * advanceMonths);
+                }
               }}>
                 <SelectTrigger><SelectValue placeholder="בחר לקוח" /></SelectTrigger>
                 <SelectContent>
                   {cashCustomers.map(c => (
                     <SelectItem key={c.id} value={String(c.id)}>
-                      {c.nickname || c.fullName}
+                      {c.nickname || c.fullName} (₪{(c.paymentMethod === 'mixed' ? c.cashAmount : c.monthlyAmount).toLocaleString()}/חודש)
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1.5">
-              <Label>מספר חודשים</Label>
-              <Input type="number" dir="ltr" min={1} max={12} value={advanceMonths} onChange={e => setAdvanceMonths(Number(e.target.value) || 1)} />
+
+            {/* Mode Toggle */}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setAdvanceMode('amount')}
+                className={`p-2.5 rounded-lg border-2 text-sm font-medium transition-all ${
+                  advanceMode === 'amount'
+                    ? 'border-primary bg-primary/10 text-primary'
+                    : 'border-border text-muted-foreground hover:border-muted-foreground/30'
+                }`}
+              >
+                💰 לפי סכום
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdvanceMode('months')}
+                className={`p-2.5 rounded-lg border-2 text-sm font-medium transition-all ${
+                  advanceMode === 'months'
+                    ? 'border-primary bg-primary/10 text-primary'
+                    : 'border-border text-muted-foreground hover:border-muted-foreground/30'
+                }`}
+              >
+                📅 לפי חודשים
+              </button>
             </div>
-            {advanceCustomerId && (
-              <p className="text-sm text-muted-foreground">
-                סה"כ: ₪{(advanceAmount * advanceMonths).toLocaleString()}
-              </p>
+
+            {advanceMode === 'amount' ? (
+              <div className="space-y-1.5">
+                <Label>סכום ששולם (₪)</Label>
+                <Input
+                  type="number"
+                  dir="ltr"
+                  value={advanceTotalAmount || ''}
+                  onChange={e => setAdvanceTotalAmount(Number(e.target.value) || 0)}
+                  placeholder="למשל 1000"
+                />
+                {advanceCustomerId && advanceAmount > 0 && advanceTotalAmount > 0 && (
+                  <div className="text-sm bg-muted/50 rounded-lg p-3 space-y-1 mt-2">
+                    {(() => {
+                      const custDebtsUnpaid = debts.filter(d => d.customerId === Number(advanceCustomerId) && (d.status === 'unpaid' || d.status === 'partial'));
+                      const existingDebt = custDebtsUnpaid.reduce((s, d) => s + (d.amount - d.paidAmount), 0);
+                      const afterDebt = Math.max(0, advanceTotalAmount - existingDebt);
+                      const fullMonths = Math.floor(afterDebt / advanceAmount);
+                      const rem = afterDebt - (fullMonths * advanceAmount);
+                      return (
+                        <>
+                          {existingDebt > 0 && <p>🔴 כיסוי חוב קיים: <span className="font-semibold">₪{Math.min(existingDebt, advanceTotalAmount).toLocaleString()}</span></p>}
+                          {fullMonths > 0 && <p>✅ חודשים מראש: <span className="font-semibold">{fullMonths}</span></p>}
+                          {rem > 0 && <p>🟡 עודף לחודש הבא: <span className="font-semibold">₪{rem.toLocaleString()}</span></p>}
+                          <p className="text-xs text-muted-foreground pt-1">סכום חודשי: ₪{advanceAmount.toLocaleString()}</p>
+                        </>
+                      );
+                    })()}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <Label>מספר חודשים</Label>
+                <Input type="number" dir="ltr" min={1} max={24} value={advanceMonths} onChange={e => {
+                  const m = Number(e.target.value) || 1;
+                  setAdvanceMonths(m);
+                  setAdvanceTotalAmount(advanceAmount * m);
+                }} />
+                {advanceCustomerId && advanceAmount > 0 && (
+                  <p className="text-sm text-muted-foreground mt-1">
+                    סה"כ: <span className="font-semibold">₪{(advanceAmount * advanceMonths).toLocaleString()}</span>
+                  </p>
+                )}
+              </div>
             )}
           </div>
           <div className="flex justify-end gap-3">
-            <Button variant="secondary" onClick={() => setAdvanceDialog(false)}>ביטול</Button>
-            <Button onClick={handleAdvancePayment} disabled={!advanceCustomerId}>
+            <Button type="button" variant="secondary" onClick={() => setAdvanceDialog(false)}>ביטול</Button>
+            <Button type="button" onClick={handleAdvancePayment} disabled={!advanceCustomerId || (advanceMode === 'amount' && advanceTotalAmount <= 0)}>
               <Check className="h-4 w-4 ml-1" />
-              שלם מראש
+              בצע תשלום
             </Button>
           </div>
         </DialogContent>
