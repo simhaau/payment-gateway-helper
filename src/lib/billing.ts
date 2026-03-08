@@ -1,4 +1,4 @@
-import { Customer, BillingBatch, BillingTransaction } from './types';
+import { Customer, BillingBatch, BillingTransaction, DebtRecord } from './types';
 
 export function getCustomersDueForBilling(customers: Customer[], targetDate?: Date): Customer[] {
   const now = targetDate || new Date();
@@ -17,8 +17,12 @@ export function getCustomersDueForBilling(customers: Customer[], targetDate?: Da
 
 export function createBillingBatch(
   customers: Customer[],
-  valueDate: string
+  valueDate: string,
+  extraDebts?: DebtRecord[],
+  months?: number
 ): BillingBatch {
+  const monthCount = months || 1;
+
   const transactions: BillingTransaction[] = customers.map(c => {
     const errors: string[] = [];
     if (!c.bankNumber) errors.push('חסר מספר בנק');
@@ -26,16 +30,30 @@ export function createBillingBatch(
     if (!c.accountNumber) errors.push('חסר מספר חשבון');
     if (!c.monthlyAmount || c.monthlyAmount <= 0) errors.push('סכום לא תקין');
 
+    const baseAmount = (c.paymentMethod === 'mixed' ? (c.bankAmount || c.monthlyAmount) : c.monthlyAmount);
+    
+    // Add any extra debts (unpaid) for this customer
+    const customerExtras = (extraDebts || []).filter(d => 
+      d.customerId === c.id! && 
+      d.status !== 'paid' && 
+      d.status !== 'advance'
+    );
+    const extraAmount = customerExtras.reduce((s, d) => s + (d.amount - d.paidAmount), 0);
+    const totalAmount = (baseAmount * monthCount) + extraAmount;
+
     return {
       customerId: c.id!,
       customerName: c.fullName,
-      amount: (c.paymentMethod === 'mixed' ? (c.bankAmount || c.monthlyAmount) : c.monthlyAmount),
+      amount: totalAmount,
       bankNumber: c.bankNumber,
       branchNumber: c.branchNumber,
       accountNumber: c.accountNumber,
       idNumber: c.idNumber,
       status: errors.length > 0 ? 'error' as const : 'included' as const,
-      errorMessage: errors.join(', '),
+      errorMessage: errors.length > 0 
+        ? errors.join(', ') 
+        : (extraAmount > 0 ? `כולל ₪${extraAmount.toLocaleString()} חיובים נוספים` : '') + 
+          (monthCount > 1 ? `${monthCount > 1 && extraAmount > 0 ? ' • ' : ''}${monthCount} חודשים` : ''),
     };
   });
 

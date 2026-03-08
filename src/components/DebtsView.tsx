@@ -56,6 +56,11 @@ export default function DebtsView() {
     [customers]
   );
 
+  const allActiveCustomers = useMemo(() =>
+    customers.filter(c => c.status === 'active'),
+    [customers]
+  );
+
   const displayName = (c: Customer) => c.nickname || c.fullName;
 
   const filteredDebts = useMemo(() => {
@@ -567,7 +572,7 @@ export default function DebtsView() {
               <Label>לקוח</Label>
               <Select value={advanceCustomerId} onValueChange={v => {
                 setAdvanceCustomerId(v);
-                const c = cashCustomers.find(c => c.id === Number(v));
+                const c = allActiveCustomers.find(c => c.id === Number(v));
                 if (c) {
                   const amt = c.paymentMethod === 'mixed' ? c.cashAmount : c.monthlyAmount;
                   setAdvanceAmount(amt);
@@ -576,9 +581,9 @@ export default function DebtsView() {
               }}>
                 <SelectTrigger><SelectValue placeholder="בחר לקוח" /></SelectTrigger>
                 <SelectContent>
-                  {cashCustomers.map(c => (
+                  {allActiveCustomers.map(c => (
                     <SelectItem key={c.id} value={String(c.id)}>
-                      {c.nickname || c.fullName} (₪{(c.paymentMethod === 'mixed' ? c.cashAmount : c.monthlyAmount).toLocaleString()}/חודש)
+                      {c.nickname || c.fullName} (₪{(c.paymentMethod === 'mixed' ? c.cashAmount : c.monthlyAmount).toLocaleString()}/חודש • {c.paymentMethod === 'bank' ? 'בנק' : c.paymentMethod === 'mixed' ? 'משולב' : 'מזומן'})
                     </SelectItem>
                   ))}
                 </SelectContent>
