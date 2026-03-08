@@ -48,8 +48,20 @@ export default function CustomersView() {
   const [viewingCustomer, setViewingCustomer] = useState<Customer | null>(null);
 
   const loadData = () => {
-    Promise.all([getAllCustomers(), getAllGroups(), getSettings()])
-      .then(([c, g, s]) => { setCustomers(c); setGroups(g); setSettings(s); });
+    Promise.all([getAllCustomers(), getAllGroups(), getSettings(), getAllDebts()])
+      .then(([c, g, s, d]) => { setCustomers(c); setGroups(g); setSettings(s); setDebts(d); });
+  };
+
+  const currentMonth = useMemo(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  }, []);
+
+  const getCustomerTotalThisMonth = (customerId: number) => {
+    const customerDebts = debts.filter(d => d.customerId === customerId && d.month === currentMonth);
+    const totalCharged = customerDebts.reduce((s, d) => s + d.amount, 0);
+    const totalPaid = customerDebts.reduce((s, d) => s + d.paidAmount, 0);
+    return { totalCharged, totalPaid, balance: totalCharged - totalPaid, debts: customerDebts };
   };
 
   useEffect(() => { loadData(); }, []);
