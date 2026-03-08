@@ -6,48 +6,48 @@
 
 @layer base {
   :root {
-    --background: 220 20% 7%;
-    --foreground: 210 20% 90%;
+    --background: 220 20% 97%;
+    --foreground: 222 47% 11%;
 
-    --card: 220 20% 10%;
-    --card-foreground: 210 20% 90%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
 
-    --popover: 220 20% 12%;
-    --popover-foreground: 210 20% 90%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
 
-    --primary: 210 100% 55%;
+    --primary: 217 91% 50%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 220 15% 16%;
-    --secondary-foreground: 210 20% 85%;
+    --secondary: 220 14% 92%;
+    --secondary-foreground: 222 47% 11%;
 
-    --muted: 220 15% 14%;
-    --muted-foreground: 215 15% 50%;
+    --muted: 220 14% 94%;
+    --muted-foreground: 220 9% 43%;
 
-    --accent: 160 84% 39%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 220 14% 92%;
+    --accent-foreground: 222 47% 11%;
 
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 220 15% 18%;
-    --input: 220 15% 16%;
-    --ring: 210 100% 55%;
+    --border: 220 13% 87%;
+    --input: 220 13% 87%;
+    --ring: 217 91% 50%;
 
     --radius: 0.625rem;
 
     --success: 160 84% 39%;
     --warning: 38 92% 50%;
-    --info: 210 100% 55%;
+    --info: 217 91% 50%;
 
-    --sidebar-background: 220 20% 9%;
-    --sidebar-foreground: 210 20% 85%;
-    --sidebar-primary: 210 100% 55%;
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 222 47% 11%;
+    --sidebar-primary: 217 91% 50%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 220 15% 14%;
-    --sidebar-accent-foreground: 210 20% 85%;
-    --sidebar-border: 220 15% 16%;
-    --sidebar-ring: 210 100% 55%;
+    --sidebar-accent: 220 14% 94%;
+    --sidebar-accent-foreground: 222 47% 11%;
+    --sidebar-border: 220 13% 90%;
+    --sidebar-ring: 217 91% 50%;
   }
 }
 
@@ -60,7 +60,6 @@
     @apply bg-background text-foreground font-heebo antialiased;
   }
 
-  /* RTL scrollbar styling */
   ::-webkit-scrollbar {
     width: 6px;
     height: 6px;
@@ -79,12 +78,12 @@
 
 @layer utilities {
   .glass-card {
-    @apply bg-card/80 backdrop-blur-sm border border-border/50 rounded-lg;
+    @apply bg-card border border-border rounded-lg shadow-sm;
   }
   .stat-glow {
-    box-shadow: 0 0 20px -5px hsl(var(--primary) / 0.2);
+    box-shadow: 0 1px 3px 0 hsl(var(--primary) / 0.08);
   }
   .success-glow {
-    box-shadow: 0 0 20px -5px hsl(var(--success) / 0.2);
+    box-shadow: 0 1px 3px 0 hsl(var(--success) / 0.08);
   }
 }
