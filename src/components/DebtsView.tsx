@@ -470,9 +470,10 @@ export default function DebtsView() {
                   ₪{(d.amount - d.paidAmount).toLocaleString()}
                 </TableCell>
                 <TableCell>{getStatusBadge(d.status)}</TableCell>
+                <TableCell className="text-xs text-muted-foreground max-w-[120px] truncate" title={d.notes}>{d.notes}</TableCell>
                 <TableCell>
-                  {d.status !== 'paid' && d.status !== 'advance' && (
-                    <div className="flex gap-1">
+                  <div className="flex gap-1">
+                    {d.status !== 'paid' && d.status !== 'advance' && (
                       <Button
                         size="sm"
                         variant="outline"
@@ -482,8 +483,16 @@ export default function DebtsView() {
                         <Banknote className="h-3 w-3 ml-1" />
                         שלם
                       </Button>
-                    </div>
-                  )}
+                    )}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                      onClick={() => setDeleteTarget(d)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             ))}
