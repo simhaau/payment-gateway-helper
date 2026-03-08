@@ -76,6 +76,37 @@ export default function BillingView() {
       const extras = getExtraDebts();
       const batch = createBillingBatch(targets, valueDate, extras, billingMonths);
       await addBatch(batch);
+
+      // Auto-settle: create/update debt records as paid for each included transaction
+      const now = new Date();
+      const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      for (const t of batch.transactions.filter(tx => tx.status === 'included')) {
+        // Mark extra debts as paid
+        const custExtras = extras.filter(d => d.customerId === t.customerId && d.status !== 'paid');
+        for (const d of custExtras) {
+          await updateDebt({ ...d, paidAmount: d.amount, status: 'paid', paidDate: now.toISOString().split('T')[0], notes: d.notes ? `${d.notes} | שולם באצווה` : 'שולם באצווה' });
+        }
+        // Mark monthly debts as paid for billed months
+        for (let m = 0; m < billingMonths; m++) {
+          const monthDate = new Date(now.getFullYear(), now.getMonth() + m);
+          const month = `${monthDate.getFullYear()}-${String(monthDate.getMonth() + 1).padStart(2, '0')}`;
+          const existingDebt = debts.find(d => d.customerId === t.customerId && d.month === month && d.status !== 'paid' && d.status !== 'advance');
+          if (existingDebt) {
+            await updateDebt({ ...existingDebt, paidAmount: existingDebt.amount, status: 'paid', paidDate: now.toISOString().split('T')[0], notes: existingDebt.notes ? `${existingDebt.notes} | שולם באצווה` : 'שולם באצווה' });
+          }
+        }
+
+        // Log activity
+        await addActivity({
+          type: 'batch',
+          description: `גבייה באצווה: ₪${t.amount.toLocaleString()} מ${t.customerName}${billingMonths > 1 ? ` (${billingMonths} חודשים)` : ''}`,
+          customerId: t.customerId,
+          customerName: t.customerName,
+          amount: t.amount,
+          createdAt: now.toISOString(),
+        });
+      }
+
       toast.success(`אצוות גבייה נוצרה: ${batch.transactionCount} פעולות, ₪${batch.totalAmount.toLocaleString()}${billingMonths > 1 ? ` (${billingMonths} חודשים)` : ''}`);
       loadData();
     } catch (e) {
