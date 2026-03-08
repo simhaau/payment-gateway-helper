@@ -242,7 +242,7 @@ export default function BulkChargeView() {
           <div className="flex items-center gap-4 mt-4">
             <Button onClick={() => setConfirmDialog(true)} disabled={chargeAmount <= 0 || targetCustomers.length === 0} className="gap-2">
               <Plus className="h-4 w-4" />
-              הוסף חיוב ל-{targetCustomers.length} לקוחות (₪{chargeAmount.toLocaleString()} כ"א)
+              הוסף חיוב ל-{targetCustomers.length} לקוחות (₪{chargeAmount.toLocaleString()} כ"א{spreadMonths > 1 ? ` × ${spreadMonths} חודשים` : ''})
             </Button>
             <Button variant="destructive" onClick={() => setCancelDialog(true)} className="gap-2">
               <Trash2 className="h-4 w-4" />
