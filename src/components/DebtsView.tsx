@@ -36,10 +36,10 @@ export default function DebtsView() {
   const [advanceMonths, setAdvanceMonths] = useState(1);
   const [advanceAmount, setAdvanceAmount] = useState(0);
   const [deleteTarget, setDeleteTarget] = useState<DebtRecord | null>(null);
-  // Extra charge dialog
+  // Extra amperes dialog
   const [extraChargeDialog, setExtraChargeDialog] = useState(false);
   const [extraChargeCustomerId, setExtraChargeCustomerId] = useState('');
-  const [extraChargeAmount, setExtraChargeAmount] = useState(0);
+  const [extraChargeAmperes, setExtraChargeAmperes] = useState(0);
   const [extraChargeNotes, setExtraChargeNotes] = useState('');
   // Cash payment dialog (pay any customer's debt in cash)
   const [cashPayDialog, setCashPayDialog] = useState(false);
