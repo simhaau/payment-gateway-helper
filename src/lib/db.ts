@@ -64,6 +64,12 @@ function openDB(): Promise<IDBDatabase> {
         ds.createIndex('month', 'month');
         ds.createIndex('status', 'status');
       }
+      if (!db.objectStoreNames.contains('activities')) {
+        const as = db.createObjectStore('activities', { keyPath: 'id', autoIncrement: true });
+        as.createIndex('type', 'type');
+        as.createIndex('customerId', 'customerId');
+        as.createIndex('createdAt', 'createdAt');
+      }
     };
   });
 }
