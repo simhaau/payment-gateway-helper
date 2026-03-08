@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { getAllCustomers, deleteCustomer, addCustomer, getAllGroups, bulkUpdateCustomers } from '@/lib/db';
+import { parseCSVCustomers } from '@/lib/csvImport';
 import CustomerDialog from './CustomerDialog';
 import type { Customer, Group } from '@/lib/types';
 import { toast } from 'sonner';
