@@ -316,6 +316,15 @@ export default function DebtsView() {
       paidDate: newStatus === 'paid' ? new Date().toISOString().split('T')[0] : debt.paidDate,
       notes: debt.notes ? `${debt.notes} | שולם במזומן` : 'שולם במזומן',
     });
+    await addActivity({
+      type: 'cash_override',
+      description: `תשלום במזומן: ₪${actualPay.toLocaleString()} מ${debt.customerName} (${debt.month}) — ${newStatus === 'paid' ? 'סולק' : 'חלקי'}`,
+      customerId: debt.customerId,
+      customerName: debt.customerName,
+      amount: actualPay,
+      relatedId: debt.id,
+      createdAt: new Date().toISOString(),
+    });
     toast.success(newStatus === 'paid' ? `החוב סולק במזומן (₪${actualPay.toLocaleString()})` : `שולם ₪${actualPay.toLocaleString()} במזומן`);
     setCashPayDialog(false);
     setCashPayCustomerId('');
