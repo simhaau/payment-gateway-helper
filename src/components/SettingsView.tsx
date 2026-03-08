@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { getSettings, saveSettings, exportAllData } from '@/lib/db';
+import { getSettings, saveSettings, exportAllData, importData } from '@/lib/db';
 import type { Settings } from '@/lib/types';
 import { DEFAULT_SETTINGS } from '@/lib/types';
 import { toast } from 'sonner';
