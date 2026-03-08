@@ -95,15 +95,44 @@ export default function CustomerDialog({ open, onOpenChange, customer, groups, o
 
   const handleSave = useCallback(async () => {
     if (!fullName.trim()) { toast.error('שם הלקוח חובה'); return; }
-    if (paymentMethod === 'mixed' && bankAmount + cashAmount !== monthlyAmount) {
-      toast.error('סכום הבנק + מזומן חייב להיות שווה לסכום החודשי');
-      return;
+
+    let normalizedBankAmount = bankAmount;
+    let normalizedCashAmount = cashAmount;
+
+    if (paymentMethod === 'bank') {
+      normalizedBankAmount = monthlyAmount;
+      normalizedCashAmount = 0;
     }
+
+    if (paymentMethod === 'cash') {
+      normalizedBankAmount = 0;
+      normalizedCashAmount = monthlyAmount;
+    }
+
+    if (paymentMethod === 'mixed') {
+      const bank = Math.max(0, Number(bankAmount) || 0);
+      const cash = Math.max(0, Number(cashAmount) || 0);
+      const totalSplit = bank + cash;
+
+      if (monthlyAmount <= 0) {
+        normalizedBankAmount = 0;
+        normalizedCashAmount = 0;
+      } else if (totalSplit <= 0) {
+        const half = Math.floor(monthlyAmount / 2);
+        normalizedBankAmount = half;
+        normalizedCashAmount = monthlyAmount - half;
+      } else {
+        const ratio = bank / totalSplit;
+        normalizedBankAmount = Math.round(monthlyAmount * ratio);
+        normalizedCashAmount = monthlyAmount - normalizedBankAmount;
+      }
+    }
+
     try {
       const now = new Date().toISOString();
       const data = {
         fullName, nickname, idNumber, phone, email, address, notes,
-        paymentMethod, bankAmount, cashAmount,
+        paymentMethod, bankAmount: normalizedBankAmount, cashAmount: normalizedCashAmount,
         bankNumber, branchNumber, accountNumber, accountHolderName,
         authorizationRef, authorizationDate, monthlyAmount,
         billingCycle, startDate, endDate,
