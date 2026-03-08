@@ -201,17 +201,21 @@ export async function getAllGroups(): Promise<Group[]> {
 
 export async function addGroup(g: Omit<Group, 'id'>): Promise<number> {
   const store = await txStore('groups', 'readwrite');
-  return reqToPromise(store.add(g)) as Promise<number>;
+  const id = await reqToPromise(store.add(g)) as Promise<number>;
+  scheduleBackup();
+  return id;
 }
 
 export async function updateGroup(g: Group): Promise<void> {
   const store = await txStore('groups', 'readwrite');
   await reqToPromise(store.put(g));
+  scheduleBackup();
 }
 
 export async function deleteGroup(id: number): Promise<void> {
   const store = await txStore('groups', 'readwrite');
   await reqToPromise(store.delete(id));
+  scheduleBackup();
 }
 
 // BATCHES
@@ -222,17 +226,21 @@ export async function getAllBatches(): Promise<BillingBatch[]> {
 
 export async function addBatch(b: Omit<BillingBatch, 'id'>): Promise<number> {
   const store = await txStore('batches', 'readwrite');
-  return reqToPromise(store.add(b)) as Promise<number>;
+  const id = await reqToPromise(store.add(b)) as Promise<number>;
+  scheduleBackup();
+  return id;
 }
 
 export async function updateBatch(b: BillingBatch): Promise<void> {
   const store = await txStore('batches', 'readwrite');
   await reqToPromise(store.put(b));
+  scheduleBackup();
 }
 
 export async function deleteBatch(id: number): Promise<void> {
   const store = await txStore('batches', 'readwrite');
   await reqToPromise(store.delete(id));
+  scheduleBackup();
 }
 
 // SETTINGS
