@@ -244,9 +244,15 @@ export default function CustomersView() {
                   <TableCell className="text-sm font-mono" dir="ltr">
                     {(c.paymentMethod || 'bank') !== 'cash' && c.bankNumber ? `${c.bankNumber}-${c.branchNumber}-${c.accountNumber}` : '-'}
                   </TableCell>
+                  <TableCell className="font-medium" dir="ltr">
+                    {(c.amperes || 0) > 0 ? c.amperes : '-'}
+                  </TableCell>
                   <TableCell className="text-success font-medium">
-                    {c.monthlyAmount > 0 ? `₪${c.monthlyAmount.toLocaleString()}` : '-'}
-                    {c.paymentMethod === 'mixed' && c.monthlyAmount > 0 && (
+                    {(() => {
+                      const amt = getCustomerMonthlyAmount(c, pricePerAmpere);
+                      return amt > 0 ? `₪${amt.toLocaleString()}` : '-';
+                    })()}
+                    {c.paymentMethod === 'mixed' && (c.amperes || 0) > 0 && (
                       <span className="text-xs text-muted-foreground block">
                         בנק: ₪{(c.bankAmount || 0).toLocaleString()} | מזומן: ₪{(c.cashAmount || 0).toLocaleString()}
                       </span>
