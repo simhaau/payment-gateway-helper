@@ -11,14 +11,29 @@ import { BillingBatch, Settings } from './types';
  * - End record: 128 nines
  */
 
+// Normalize free-text fields to strict ASCII (MASAV is fixed-width single-byte format)
+function toAscii(input: string): string {
+  return (input ?? '')
+    .normalize('NFKD')
+    .replace(/[^\x20-\x7E]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 // Pad string with spaces on the right to exact length
 function padRight(str: string, len: number): string {
-  return str.slice(0, len).padEnd(len, ' ');
+  return toAscii(str).slice(0, len).padEnd(len, ' ');
 }
 
 // Pad string with zeros (or given char) on the left to exact length
 function padLeft(str: string, len: number, char = '0'): string {
-  return str.slice(0, len).padStart(len, char);
+  return String(str ?? '').slice(0, len).padStart(len, char);
+}
+
+function ensureRecordLength(record: string, type: string) {
+  if (record.length !== 128) {
+    throw new Error(`MASAV ${type} record must be 128 chars, got ${record.length}`);
+  }
 }
 
 // Format date as YYMMDD
@@ -41,8 +56,8 @@ export function generateMasavFile(batch: BillingBatch, settings: Settings): stri
   const validTx = batch.transactions.filter(t => t.status === 'included');
   const paymentDate = formatDate(batch.valueDate);
   const creationDate = formatDate(batch.date);
-  const institutionCode = padLeft(settings.masavSenderCode, 8);
-  const sendingInstitution = padLeft(settings.institutionCode, 5);
+  const institutionCode = padLeft(String(settings.masavSenderCode).replace(/\D/g, ''), 8);
+  const sendingInstitution = padLeft(String(settings.institutionCode).replace(/\D/g, ''), 5);
 
   // ============================================
   // Header Record (128 chars) - Record ID 'K'
@@ -58,9 +73,10 @@ export function generateMasavFile(batch: BillingBatch, settings: Settings): stri
   header += creationDate;                            // Pos 23-28 (6)  Date tape created YYMMDD
   header += sendingInstitution;                      // Pos 29-33 (5)  Sending institution
   header += '000000';                                // Pos 34-39 (6)  Filler (zeros)
-  header += padRight(settings.organizationName, 30); // Pos 40-69 (30) Name of institution
+  header += padRight(settings.organizationName, 30); // Pos 40-69 (30) Name of institution (ASCII only)
   header += padRight('', 56);                        // Pos 70-125(56) Filler (blanks)
   header += 'KOT';                                   // Pos 126-128(3) Header ID
+  ensureRecordLength(header, 'header');
   lines.push(header);
 
   // ============================================
@@ -72,20 +88,21 @@ export function generateMasavFile(batch: BillingBatch, settings: Settings): stri
     line += institutionCode;                         // Pos 2-9   (8)  Institution/subject
     line += '00';                                    // Pos 10-11 (2)  Currency
     line += '000000';                                // Pos 12-17 (6)  Filler
-    line += padLeft(tx.bankNumber, 2);               // Pos 18-19 (2)  Bank code
-    line += padLeft(tx.branchNumber, 3);             // Pos 20-22 (3)  Branch number
+    line += padLeft(String(tx.bankNumber).replace(/\D/g, ''), 2);    // Pos 18-19 (2)  Bank code
+    line += padLeft(String(tx.branchNumber).replace(/\D/g, ''), 3);  // Pos 20-22 (3)  Branch number
     line += '0000';                                  // Pos 23-26 (4)  Account type
-    line += padLeft(tx.accountNumber, 9);            // Pos 27-35 (9)  Account number
+    line += padLeft(String(tx.accountNumber).replace(/\D/g, ''), 9); // Pos 27-35 (9)  Account number
     line += '0';                                     // Pos 36    (1)  Filler
-    line += padLeft(tx.idNumber.replace(/\D/g, ''), 9);  // Pos 37-45 (9)  ID number
-    line += padRight(tx.customerName, 16);           // Pos 46-61 (16) Name of entitled
+    line += padLeft(String(tx.idNumber).replace(/\D/g, ''), 9);      // Pos 37-45 (9)  ID number
+    line += padRight(tx.customerName, 16);           // Pos 46-61 (16) Name of entitled (ASCII translated)
     line += amountToField(tx.amount, 13);            // Pos 62-74 (13) Amount (11+2)
-    line += padRight(tx.idNumber, 20);               // Pos 75-94 (20) Reference
+    line += padRight(String(tx.idNumber).replace(/\D/g, ''), 20);    // Pos 75-94 (20) Reference
     line += '00000000';                              // Pos 95-102(8)  Payment period
     line += '000';                                   // Pos 103-105(3) Text code
     line += '002';                                   // Pos 106-108(3) Movement type (002=debit)
     line += padLeft('', 18);                         // Pos 109-126(18) Filler (zeros)
     line += '  ';                                    // Pos 127-128(2) Filler (blanks)
+    ensureRecordLength(line, 'movement');
     lines.push(line);
   }
 
@@ -104,12 +121,15 @@ export function generateMasavFile(batch: BillingBatch, settings: Settings): stri
   totals += padLeft('', 15);                         // Pos 37-51 (15) Filler (zeros)
   totals += padLeft(String(validTx.length), 7);      // Pos 52-58 (7)  Number of movements
   totals += padLeft('', 70);                         // Pos 59-128(70) Filler (zeros)
+  ensureRecordLength(totals, 'totals');
   lines.push(totals);
 
   // ============================================
   // End Record - 128 nines
   // ============================================
-  lines.push('9'.repeat(128));
+  const end = '9'.repeat(128);
+  ensureRecordLength(end, 'end');
+  lines.push(end);
 
   // Join with CR+LF as per spec
   return lines.join('\r\n');
@@ -131,6 +151,9 @@ export function validateBatchForMasav(batch: BillingBatch, settings: Settings): 
   if (!settings.institutionCode) {
     errors.push({ customerId: 0, customerName: 'מערכת', field: 'institutionCode', message: 'חסר קוד מוסד שולח בהגדרות' });
   }
+  if (toAscii(settings.organizationName) !== settings.organizationName.trim()) {
+    errors.push({ customerId: 0, customerName: 'מערכת', field: 'organizationName', message: 'שם הארגון בקובץ מסב חייב להיות באנגלית/ASCII בלבד' });
+  }
 
   for (const tx of batch.transactions) {
     if (tx.status !== 'included') continue;
@@ -150,15 +173,22 @@ export function validateBatchForMasav(batch: BillingBatch, settings: Settings): 
     if (!tx.idNumber || !/^\d{1,9}$/.test(tx.idNumber.replace(/\D/g, ''))) {
       errors.push({ customerId: tx.customerId, customerName: tx.customerName, field: 'idNumber', message: 'מספר זהות לא תקין' });
     }
+    if (toAscii(tx.customerName) !== tx.customerName.trim()) {
+      errors.push({ customerId: tx.customerId, customerName: tx.customerName, field: 'customerName', message: 'שם לקוח למסב חייב להיות באנגלית/ASCII בלבד (שם מתורגם)' });
+    }
   }
 
   return errors;
 }
 
 export function downloadMasavFile(content: string, filename: string) {
-  // MASAV files use ASCII encoding
-  const encoder = new TextEncoder();
-  const bytes = encoder.encode(content);
+  // MASAV files are strict single-byte ASCII
+  const bytes = new Uint8Array(content.length);
+  for (let i = 0; i < content.length; i++) {
+    const code = content.charCodeAt(i);
+    bytes[i] = code <= 0x7f ? code : 32; // fallback to space for any unexpected non-ASCII char
+  }
+
   const blob = new Blob([bytes], { type: 'application/octet-stream' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
