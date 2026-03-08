@@ -26,6 +26,8 @@ export default function DebtsView() {
   });
   const [advanceDialog, setAdvanceDialog] = useState(false);
   const [advanceCustomerId, setAdvanceCustomerId] = useState('');
+  const [advanceMode, setAdvanceMode] = useState<'amount' | 'months'>('amount');
+  const [advanceTotalAmount, setAdvanceTotalAmount] = useState(0);
   const [advanceMonths, setAdvanceMonths] = useState(1);
   const [advanceAmount, setAdvanceAmount] = useState(0);
 
