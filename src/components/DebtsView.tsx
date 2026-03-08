@@ -498,7 +498,7 @@ export default function DebtsView() {
             ))}
             {filteredDebts.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
                   אין חובות להצגה
                 </TableCell>
               </TableRow>
