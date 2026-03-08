@@ -2,6 +2,7 @@ import { Customer, Group, BillingBatch, Settings, DEFAULT_SETTINGS } from './typ
 
 const DB_NAME = 'masav_collection_system';
 const DB_VERSION = 1;
+const BACKUP_KEY = 'masav_backup';
 
 let dbInstance: IDBDatabase | null = null;
 
@@ -44,6 +45,110 @@ function reqToPromise<T>(req: IDBRequest<T>): Promise<T> {
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   });
+}
+
+// Auto-backup to localStorage after every write operation
+let backupTimeout: ReturnType<typeof setTimeout> | null = null;
+function scheduleBackup() {
+  if (backupTimeout) clearTimeout(backupTimeout);
+  backupTimeout = setTimeout(async () => {
+    try {
+      const [customers, groups, batches, settings] = await Promise.all([
+        getAllCustomers(), getAllGroups(), getAllBatches(), getSettings()
+      ]);
+      const backup = JSON.stringify({ customers, groups, batches, settings, backupDate: new Date().toISOString() });
+      localStorage.setItem(BACKUP_KEY, backup);
+    } catch (e) {
+      console.warn('Auto-backup failed:', e);
+    }
+  }, 500); // debounce 500ms
+}
+
+// Restore from localStorage backup if IndexedDB is empty
+export async function restoreFromBackupIfNeeded(): Promise<boolean> {
+  try {
+    const customers = await getAllCustomers();
+    if (customers.length > 0) return false; // DB has data, no need to restore
+    
+    const backupStr = localStorage.getItem(BACKUP_KEY);
+    if (!backupStr) return false;
+    
+    const backup = JSON.parse(backupStr);
+    if (!backup.customers?.length && !backup.groups?.length) return false;
+    
+    // Restore groups first (customers reference them)
+    if (backup.groups?.length) {
+      const db = await openDB();
+      const tx = db.transaction('groups', 'readwrite');
+      const store = tx.objectStore('groups');
+      for (const g of backup.groups) store.put(g);
+      await new Promise<void>((res, rej) => { tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); });
+    }
+    
+    if (backup.customers?.length) {
+      const db = await openDB();
+      const tx = db.transaction('customers', 'readwrite');
+      const store = tx.objectStore('customers');
+      for (const c of backup.customers) store.put(c);
+      await new Promise<void>((res, rej) => { tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); });
+    }
+    
+    if (backup.batches?.length) {
+      const db = await openDB();
+      const tx = db.transaction('batches', 'readwrite');
+      const store = tx.objectStore('batches');
+      for (const b of backup.batches) store.put(b);
+      await new Promise<void>((res, rej) => { tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); });
+    }
+    
+    if (backup.settings) {
+      await saveSettings(backup.settings);
+    }
+    
+    console.log('Data restored from backup:', backup.backupDate);
+    return true;
+  } catch (e) {
+    console.warn('Restore from backup failed:', e);
+    return false;
+  }
+}
+
+// Import data from JSON backup file
+export async function importData(jsonString: string): Promise<void> {
+  const data = JSON.parse(jsonString);
+  
+  if (data.groups?.length) {
+    const db = await openDB();
+    const tx = db.transaction('groups', 'readwrite');
+    const store = tx.objectStore('groups');
+    store.clear();
+    for (const g of data.groups) store.put(g);
+    await new Promise<void>((res, rej) => { tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); });
+  }
+  
+  if (data.customers?.length) {
+    const db = await openDB();
+    const tx = db.transaction('customers', 'readwrite');
+    const store = tx.objectStore('customers');
+    store.clear();
+    for (const c of data.customers) store.put(c);
+    await new Promise<void>((res, rej) => { tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); });
+  }
+  
+  if (data.batches?.length) {
+    const db = await openDB();
+    const tx = db.transaction('batches', 'readwrite');
+    const store = tx.objectStore('batches');
+    store.clear();
+    for (const b of data.batches) store.put(b);
+    await new Promise<void>((res, rej) => { tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); });
+  }
+  
+  if (data.settings) {
+    await saveSettings(data.settings);
+  }
+  
+  scheduleBackup();
 }
 
 // CUSTOMERS
