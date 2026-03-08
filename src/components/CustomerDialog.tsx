@@ -140,7 +140,7 @@ export default function CustomerDialog({ open, onOpenChange, customer, groups, o
           <DialogDescription>{isEdit ? 'ערוך את פרטי הלקוח' : 'הזן את פרטי הלקוח החדש'}</DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={(e) => { e.preventDefault(); handleSave(); }} className="space-y-6">
+        <form noValidate onSubmit={(e) => { e.preventDefault(); handleSave(); }} className="space-y-6">
           {/* Personal Info */}
           <div>
             <h3 className="text-sm font-semibold mb-3 text-primary">פרטים אישיים</h3>
