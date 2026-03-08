@@ -608,6 +608,42 @@ export default function CustomerDetailView({ customer, onBack }: Props) {
         </Card>
       </div>
 
+      {/* Future Month Charges */}
+      {futureMonthBreakdown.length > 0 && (
+        <Card className="glass-card border-warning/30">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <CalendarClock className="h-4 w-4 text-warning" />
+              חיובים עתידיים ({futureMonthDebts.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {futureMonthBreakdown.map(fm => (
+                <div key={fm.month} className="rounded-lg border border-border/50 overflow-hidden">
+                  <div className="flex items-center justify-between bg-warning/5 px-4 py-2">
+                    <span className="font-mono text-sm font-medium" dir="ltr">{fm.month}</span>
+                    <span className="text-sm font-medium">₪{fm.total.toLocaleString()}</span>
+                  </div>
+                  <Table>
+                    <TableBody>
+                      {fm.debts.map(d => (
+                        <TableRow key={d.id} className={`hover:bg-muted/30 ${d.status === 'suspended' ? 'opacity-50' : ''}`}>
+                          <TableCell className="text-sm">{d.notes || 'חיוב'}</TableCell>
+                          <TableCell className="font-medium">₪{d.amount.toLocaleString()}</TableCell>
+                          <TableCell>{getDebtStatusBadge(d.status)}</TableCell>
+                          <TableCell className="text-left">{renderChargeActions(d)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Detailed Monthly Breakdown */}
       <Card className="glass-card">
         <CardHeader>
