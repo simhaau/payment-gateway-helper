@@ -246,6 +246,14 @@ export default function DebtsView() {
 
   const handleDeleteDebt = async () => {
     if (!deleteTarget?.id) return;
+    await addActivity({
+      type: 'debt_deleted',
+      description: `מחיקת חיוב: ₪${deleteTarget.amount.toLocaleString()} של ${deleteTarget.customerName} (${deleteTarget.month})`,
+      customerId: deleteTarget.customerId,
+      customerName: deleteTarget.customerName,
+      amount: deleteTarget.amount,
+      createdAt: new Date().toISOString(),
+    });
     await deleteDebt(deleteTarget.id);
     toast.success('החיוב נמחק');
     setDeleteTarget(null);
