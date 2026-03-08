@@ -305,8 +305,9 @@ export default function BulkChargeView() {
           <AlertDialogHeader>
             <AlertDialogTitle>אישור חיוב גורף</AlertDialogTitle>
             <AlertDialogDescription>
-              ייווצר חיוב על סך ₪{chargeAmount.toLocaleString()} ל-{targetCustomers.length} לקוחות עבור חודש {month}.
-              <br />סה"כ: ₪{(chargeAmount * targetCustomers.length).toLocaleString()}
+              ייווצר חיוב על סך ₪{chargeAmount.toLocaleString()} ל-{targetCustomers.length} לקוחות
+              {spreadMonths > 1 ? ` לכל אחד מ-${spreadMonths} חודשים החל מ-${month}` : ` עבור חודש ${month}`}.
+              <br />סה"כ: ₪{(chargeAmount * targetCustomers.length * spreadMonths).toLocaleString()}
               {notes && <><br />הערות: {notes}</>}
             </AlertDialogDescription>
           </AlertDialogHeader>
