@@ -155,6 +155,10 @@ export default function CustomersView() {
     return groups.find(g => g.id === gid)?.name || '';
   };
 
+  if (viewingCustomer) {
+    return <CustomerDetailView customer={viewingCustomer} onBack={() => setViewingCustomer(null)} />;
+  }
+
   return (
     <div className="space-y-4 animate-fade-in">
       {/* Toolbar */}
