@@ -7,10 +7,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { getAllCustomers, deleteCustomer, addCustomer, getAllGroups, bulkUpdateCustomers } from '@/lib/db';
+import { getAllCustomers, deleteCustomer, addCustomer, getAllGroups, bulkUpdateCustomers, getSettings } from '@/lib/db';
 import { parseCSVCustomers } from '@/lib/csvImport';
+import { getCustomerMonthlyAmount } from '@/lib/billing';
 import CustomerDialog from './CustomerDialog';
-import type { Customer, Group } from '@/lib/types';
+import type { Customer, Group, Settings } from '@/lib/types';
 import { toast } from 'sonner';
 
 const PAGE_SIZE = 50;
@@ -30,6 +31,7 @@ const PAYMENT_ICONS: Record<string, { icon: typeof Building2; label: string }> =
 export default function CustomersView() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
+  const [settings, setSettings] = useState<Settings | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [groupFilter, setGroupFilter] = useState('all');
@@ -43,8 +45,8 @@ export default function CustomersView() {
   const [bulkGroupId, setBulkGroupId] = useState<string>('');
 
   const loadData = () => {
-    Promise.all([getAllCustomers(), getAllGroups()])
-      .then(([c, g]) => { setCustomers(c); setGroups(g); });
+    Promise.all([getAllCustomers(), getAllGroups(), getSettings()])
+      .then(([c, g, s]) => { setCustomers(c); setGroups(g); setSettings(s); });
   };
 
   useEffect(() => { loadData(); }, []);
@@ -109,9 +111,11 @@ export default function CustomersView() {
 
   const displayName = (c: Customer) => c.nickname || c.fullName;
 
+  const pricePerAmpere = settings?.pricePerAmpere || 0;
+
   const exportCSV = () => {
-    const headers = ['שם', 'כינוי', 'ת.ז', 'טלפון', 'אימייל', 'תשלום', 'בנק', 'סניף', 'חשבון', 'סכום', 'סטטוס'];
-    const rows = filtered.map(c => [c.fullName, c.nickname || '', c.idNumber, c.phone, c.email, PAYMENT_ICONS[c.paymentMethod || 'bank']?.label || 'בנק', c.bankNumber, c.branchNumber, c.accountNumber, c.monthlyAmount, STATUS_MAP[c.status]?.label || c.status]);
+    const headers = ['שם', 'כינוי', 'ת.ז', 'טלפון', 'אימייל', 'תשלום', 'בנק', 'סניף', 'חשבון', 'אמפרים', 'סכום', 'סטטוס'];
+    const rows = filtered.map(c => [c.fullName, c.nickname || '', c.idNumber, c.phone, c.email, PAYMENT_ICONS[c.paymentMethod || 'bank']?.label || 'בנק', c.bankNumber, c.branchNumber, c.accountNumber, c.amperes || 0, getCustomerMonthlyAmount(c, pricePerAmpere), STATUS_MAP[c.status]?.label || c.status]);
     const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a');
@@ -209,6 +213,7 @@ export default function CustomersView() {
               <TableHead>טלפון</TableHead>
               <TableHead>תשלום</TableHead>
               <TableHead>בנק/סניף/חשבון</TableHead>
+              <TableHead>אמפרים</TableHead>
               <TableHead>סכום חודשי</TableHead>
               <TableHead>קבוצה</TableHead>
               <TableHead>סטטוס</TableHead>
@@ -239,9 +244,15 @@ export default function CustomersView() {
                   <TableCell className="text-sm font-mono" dir="ltr">
                     {(c.paymentMethod || 'bank') !== 'cash' && c.bankNumber ? `${c.bankNumber}-${c.branchNumber}-${c.accountNumber}` : '-'}
                   </TableCell>
+                  <TableCell className="font-medium" dir="ltr">
+                    {(c.amperes || 0) > 0 ? c.amperes : '-'}
+                  </TableCell>
                   <TableCell className="text-success font-medium">
-                    {c.monthlyAmount > 0 ? `₪${c.monthlyAmount.toLocaleString()}` : '-'}
-                    {c.paymentMethod === 'mixed' && c.monthlyAmount > 0 && (
+                    {(() => {
+                      const amt = getCustomerMonthlyAmount(c, pricePerAmpere);
+                      return amt > 0 ? `₪${amt.toLocaleString()}` : '-';
+                    })()}
+                    {c.paymentMethod === 'mixed' && (c.amperes || 0) > 0 && (
                       <span className="text-xs text-muted-foreground block">
                         בנק: ₪{(c.bankAmount || 0).toLocaleString()} | מזומן: ₪{(c.cashAmount || 0).toLocaleString()}
                       </span>

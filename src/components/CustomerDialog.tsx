@@ -6,8 +6,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Banknote, Building2, Shuffle } from 'lucide-react';
-import { addCustomer, updateCustomer } from '@/lib/db';
-import type { Customer, Group } from '@/lib/types';
+import { addCustomer, updateCustomer, getSettings } from '@/lib/db';
+import type { Customer, Group, Settings } from '@/lib/types';
 import { toast } from 'sonner';
 
 interface Props {
@@ -35,14 +35,21 @@ export default function CustomerDialog({ open, onOpenChange, customer, groups, o
   const [accountHolderName, setAccountHolderName] = useState('');
   const [authorizationRef, setAuthorizationRef] = useState('');
   const [authorizationDate, setAuthorizationDate] = useState('');
-  const [monthlyAmount, setMonthlyAmount] = useState(0);
+  const [amperes, setAmperes] = useState(0);
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'custom'>('monthly');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [status, setStatus] = useState<'active' | 'paused' | 'cancelled'>('active');
   const [groupId, setGroupId] = useState<number | null>(null);
+  const [settings, setSettings] = useState<Settings | null>(null);
 
   const isEdit = !!customer;
+  const pricePerAmpere = settings?.pricePerAmpere || 0;
+  const computedMonthly = amperes * pricePerAmpere;
+
+  useEffect(() => {
+    getSettings().then(s => setSettings(s));
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -63,7 +70,7 @@ export default function CustomerDialog({ open, onOpenChange, customer, groups, o
       setAccountHolderName(customer.accountHolderName);
       setAuthorizationRef(customer.authorizationRef);
       setAuthorizationDate(customer.authorizationDate);
-      setMonthlyAmount(customer.monthlyAmount);
+      setAmperes(customer.amperes || 0);
       setBillingCycle(customer.billingCycle);
       setStartDate(customer.startDate);
       setEndDate(customer.endDate);
@@ -74,7 +81,7 @@ export default function CustomerDialog({ open, onOpenChange, customer, groups, o
       setAddress(''); setNotes(''); setPaymentMethod('bank'); setBankAmount(0); setCashAmount(0);
       setBankNumber(''); setBranchNumber(''); setAccountNumber('');
       setAccountHolderName(''); setAuthorizationRef(''); setAuthorizationDate('');
-      setMonthlyAmount(0); setBillingCycle('monthly');
+      setAmperes(0); setBillingCycle('monthly');
       setStartDate(new Date().toISOString().split('T')[0]); setEndDate('');
       setStatus('active'); setGroupId(null);
     }
@@ -83,20 +90,21 @@ export default function CustomerDialog({ open, onOpenChange, customer, groups, o
 
   // Auto-split for mixed
   useEffect(() => {
-    if (paymentMethod === 'mixed' && monthlyAmount > 0) {
+    if (paymentMethod === 'mixed' && computedMonthly > 0) {
       const sum = bankAmount + cashAmount;
-      if (sum <= 0 || sum !== monthlyAmount) {
-        const half = Math.floor(monthlyAmount / 2);
+      if (sum <= 0 || sum !== computedMonthly) {
+        const half = Math.floor(computedMonthly / 2);
         setBankAmount(half);
-        setCashAmount(monthlyAmount - half);
+        setCashAmount(computedMonthly - half);
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paymentMethod, monthlyAmount]);
+  }, [paymentMethod, computedMonthly]);
 
   const handleSave = useCallback(async () => {
     if (!fullName.trim()) { toast.error('שם הלקוח חובה'); return; }
 
+    const monthlyAmount = computedMonthly;
     let normalizedBankAmount = bankAmount;
     let normalizedCashAmount = cashAmount;
 
@@ -135,7 +143,7 @@ export default function CustomerDialog({ open, onOpenChange, customer, groups, o
         fullName, nickname, idNumber, phone, email, address, notes,
         paymentMethod, bankAmount: normalizedBankAmount, cashAmount: normalizedCashAmount,
         bankNumber, branchNumber, accountNumber, accountHolderName,
-        authorizationRef, authorizationDate, monthlyAmount,
+        authorizationRef, authorizationDate, amperes, monthlyAmount,
         billingCycle, startDate, endDate,
         chargeFrequencyMonths: 1, status, groupId, tags: [] as string[],
       };
@@ -152,7 +160,7 @@ export default function CustomerDialog({ open, onOpenChange, customer, groups, o
       console.error('Save failed:', err);
       toast.error('שגיאה בשמירת הלקוח: ' + (err instanceof Error ? err.message : 'שגיאה לא ידועה'));
     }
-  }, [fullName, nickname, idNumber, phone, email, address, notes, paymentMethod, bankAmount, cashAmount, bankNumber, branchNumber, accountNumber, accountHolderName, authorizationRef, authorizationDate, monthlyAmount, billingCycle, startDate, endDate, status, groupId, isEdit, customer, onOpenChange, onSaved]);
+  }, [fullName, nickname, idNumber, phone, email, address, notes, paymentMethod, bankAmount, cashAmount, bankNumber, branchNumber, accountNumber, accountHolderName, authorizationRef, authorizationDate, amperes, computedMonthly, billingCycle, startDate, endDate, status, groupId, isEdit, customer, onOpenChange, onSaved]);
 
   const paymentMethodOptions = [
     { value: 'bank', label: 'הוראת קבע (בנק)', icon: Building2, color: 'text-primary' },
@@ -262,13 +270,18 @@ export default function CustomerDialog({ open, onOpenChange, customer, groups, o
             <h3 className="text-sm font-semibold mb-3 text-primary">הגדרות חיוב</h3>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">סכום חודשי כולל (₪)</Label>
-                <Input value={monthlyAmount || ''} onChange={e => setMonthlyAmount(Number(e.target.value) || 0)} type="number" dir="ltr" className="h-9" />
+                <Label className="text-xs text-muted-foreground">כמות אמפרים</Label>
+                <Input value={amperes || ''} onChange={e => setAmperes(Number(e.target.value) || 0)} type="number" dir="ltr" className="h-9" placeholder="למשל 25" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">סכום חודשי (מחושב)</Label>
+                <div className="h-9 flex items-center px-3 rounded-md border border-input bg-muted/50 text-sm font-medium" dir="ltr">
+                  {pricePerAmpere > 0 ? `₪${computedMonthly.toLocaleString()} (${amperes} × ₪${pricePerAmpere})` : 'הגדר מחיר לאמפר בהגדרות'}
+                </div>
               </div>
 
-              {paymentMethod === 'mixed' && (
+              {paymentMethod === 'mixed' && computedMonthly > 0 && (
                 <>
-                  <div />
                   <div className="space-y-1.5">
                     <Label className="text-xs text-muted-foreground">סכום דרך הבנק (₪)</Label>
                     <Input
@@ -276,7 +289,7 @@ export default function CustomerDialog({ open, onOpenChange, customer, groups, o
                       onChange={e => {
                         const v = Number(e.target.value) || 0;
                         setBankAmount(v);
-                        setCashAmount(monthlyAmount - v);
+                        setCashAmount(computedMonthly - v);
                       }}
                       type="number" dir="ltr" className="h-9"
                     />
@@ -288,11 +301,11 @@ export default function CustomerDialog({ open, onOpenChange, customer, groups, o
                       onChange={e => {
                         const v = Number(e.target.value) || 0;
                         setCashAmount(v);
-                        setBankAmount(monthlyAmount - v);
+                        setBankAmount(computedMonthly - v);
                       }}
                       type="number" dir="ltr" className="h-9"
                     />
-                    {bankAmount + cashAmount !== monthlyAmount && monthlyAmount > 0 && (
+                    {bankAmount + cashAmount !== computedMonthly && computedMonthly > 0 && (
                       <p className="text-xs text-destructive">הסכומים לא מסתכמים לסכום החודשי</p>
                     )}
                   </div>

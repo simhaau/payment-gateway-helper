@@ -1,17 +1,19 @@
 import { useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { getCustomerMonthlyAmount } from '@/lib/billing';
 import type { Customer, Group, BillingBatch } from '@/lib/types';
 
 interface Props {
   customers: Customer[];
   groups: Group[];
   batches: BillingBatch[];
+  pricePerAmpere: number;
 }
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
 
-export default function DashboardCharts({ customers, groups, batches }: Props) {
+export default function DashboardCharts({ customers, groups, batches, pricePerAmpere }: Props) {
   const statusData = useMemo(() => {
     const active = customers.filter(c => c.status === 'active').length;
     const paused = customers.filter(c => c.status === 'paused').length;
@@ -26,10 +28,10 @@ export default function DashboardCharts({ customers, groups, batches }: Props) {
   const groupIncomeData = useMemo(() => {
     return groups.map(g => {
       const groupCustomers = customers.filter(c => c.groupId === g.id && c.status === 'active');
-      const income = groupCustomers.reduce((s, c) => s + c.monthlyAmount, 0);
+      const income = groupCustomers.reduce((s, c) => s + getCustomerMonthlyAmount(c, pricePerAmpere), 0);
       return { name: g.name, income, count: groupCustomers.length };
     }).filter(d => d.income > 0).sort((a, b) => b.income - a.income).slice(0, 8);
-  }, [customers, groups]);
+  }, [customers, groups, pricePerAmpere]);
 
   const batchHistory = useMemo(() => {
     return batches.slice(0, 12).reverse().map(b => ({
@@ -43,7 +45,6 @@ export default function DashboardCharts({ customers, groups, batches }: Props) {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      {/* Status Distribution */}
       {statusData.length > 0 && (
         <Card className="glass-card">
           <CardHeader>
@@ -66,7 +67,6 @@ export default function DashboardCharts({ customers, groups, batches }: Props) {
         </Card>
       )}
 
-      {/* Group Income */}
       {groupIncomeData.length > 0 && (
         <Card className="glass-card">
           <CardHeader>
@@ -88,7 +88,6 @@ export default function DashboardCharts({ customers, groups, batches }: Props) {
         </Card>
       )}
 
-      {/* Batch History */}
       {batchHistory.length > 1 && (
         <Card className="glass-card lg:col-span-2">
           <CardHeader>

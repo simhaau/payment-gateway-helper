@@ -10,13 +10,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { getAllCustomers, getAllDebts, addDebt, updateDebt, deleteDebt, addActivity } from '@/lib/db';
-import type { Customer, DebtRecord } from '@/lib/types';
+import { getAllCustomers, getAllDebts, addDebt, updateDebt, deleteDebt, addActivity, getSettings } from '@/lib/db';
+import { getCustomerMonthlyAmount } from '@/lib/billing';
+import type { Customer, DebtRecord, Settings } from '@/lib/types';
 import { toast } from 'sonner';
 
 export default function DebtsView() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [debts, setDebts] = useState<DebtRecord[]>([]);
+  const [settings, setSettings] = useState<Settings | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [payDialog, setPayDialog] = useState<DebtRecord | null>(null);
@@ -33,10 +35,10 @@ export default function DebtsView() {
   const [advanceMonths, setAdvanceMonths] = useState(1);
   const [advanceAmount, setAdvanceAmount] = useState(0);
   const [deleteTarget, setDeleteTarget] = useState<DebtRecord | null>(null);
-  // Extra charge dialog
+  // Extra amperes dialog
   const [extraChargeDialog, setExtraChargeDialog] = useState(false);
   const [extraChargeCustomerId, setExtraChargeCustomerId] = useState('');
-  const [extraChargeAmount, setExtraChargeAmount] = useState(0);
+  const [extraChargeAmperes, setExtraChargeAmperes] = useState(0);
   const [extraChargeNotes, setExtraChargeNotes] = useState('');
   // Cash payment dialog (pay any customer's debt in cash)
   const [cashPayDialog, setCashPayDialog] = useState(false);
@@ -45,8 +47,8 @@ export default function DebtsView() {
   const [cashPayAmount, setCashPayAmount] = useState(0);
 
   const loadData = () => {
-    Promise.all([getAllCustomers(), getAllDebts()])
-      .then(([c, d]) => { setCustomers(c); setDebts(d); });
+    Promise.all([getAllCustomers(), getAllDebts(), getSettings()])
+      .then(([c, d, s]) => { setCustomers(c); setDebts(d); setSettings(s); });
   };
 
   useEffect(() => { loadData(); }, []);
@@ -84,10 +86,12 @@ export default function DebtsView() {
 
   const handleGenerateDebts = async () => {
     let count = 0;
+    const pricePerAmpere = settings?.pricePerAmpere || 0;
     for (const c of cashCustomers) {
       const existing = debts.find(d => d.customerId === c.id && d.month === generateMonth);
       if (existing) continue;
-      const cashAmt = c.paymentMethod === 'mixed' ? c.cashAmount : c.monthlyAmount;
+      const monthlyAmt = getCustomerMonthlyAmount(c, pricePerAmpere);
+      const cashAmt = c.paymentMethod === 'mixed' ? c.cashAmount : monthlyAmt;
       if (cashAmt <= 0) continue;
       await addDebt({
         customerId: c.id!,
@@ -136,7 +140,9 @@ export default function DebtsView() {
     if (!advanceCustomerId) return;
     const cust = customers.find(c => c.id === Number(advanceCustomerId));
     if (!cust) return;
-    const cashAmt = cust.paymentMethod === 'mixed' ? cust.cashAmount : cust.monthlyAmount;
+    const pricePerAmpere = settings?.pricePerAmpere || 0;
+    const monthlyAmt = getCustomerMonthlyAmount(cust, pricePerAmpere);
+    const cashAmt = cust.paymentMethod === 'mixed' ? cust.cashAmount : monthlyAmt;
     if (cashAmt <= 0) { toast.error('לא הוגדר סכום חודשי'); return; }
 
     const now = new Date();
@@ -269,34 +275,37 @@ export default function DebtsView() {
   };
 
   const handleExtraCharge = async () => {
-    if (!extraChargeCustomerId || extraChargeAmount <= 0) return;
+    if (!extraChargeCustomerId || extraChargeAmperes <= 0) return;
     const cust = customers.find(c => c.id === Number(extraChargeCustomerId));
     if (!cust) return;
+    const pricePerAmpere = settings?.pricePerAmpere || 0;
+    const extraAmount = extraChargeAmperes * pricePerAmpere;
+    if (extraAmount <= 0) { toast.error('הגדר מחיר לאמפר בהגדרות'); return; }
     const now = new Date();
     const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     await addDebt({
       customerId: cust.id!,
       customerName: cust.nickname || cust.fullName,
       month,
-      amount: extraChargeAmount,
+      amount: extraAmount,
       paidAmount: 0,
       status: 'unpaid',
       paidDate: '',
-      notes: extraChargeNotes || 'חיוב נוסף',
+      notes: extraChargeNotes || `${extraChargeAmperes} אמפר נוספים`,
       createdAt: now.toISOString(),
     });
     await addActivity({
       type: 'extra_charge',
-      description: `חיוב נוסף: ₪${extraChargeAmount.toLocaleString()} ל${cust.nickname || cust.fullName} (${extraChargeNotes || 'חיוב נוסף'})`,
+      description: `אמפרים נוספים: ${extraChargeAmperes} אמפר (₪${extraAmount.toLocaleString()}) ל${cust.nickname || cust.fullName} (${extraChargeNotes || 'חיוב נוסף'})`,
       customerId: cust.id,
       customerName: cust.nickname || cust.fullName,
-      amount: extraChargeAmount,
+      amount: extraAmount,
       createdAt: now.toISOString(),
     });
-    toast.success(`חיוב נוסף של ₪${extraChargeAmount.toLocaleString()} נוצר ל${cust.nickname || cust.fullName}`);
+    toast.success(`${extraChargeAmperes} אמפר נוספים (₪${extraAmount.toLocaleString()}) נוצרו ל${cust.nickname || cust.fullName}`);
     setExtraChargeDialog(false);
     setExtraChargeCustomerId('');
-    setExtraChargeAmount(0);
+    setExtraChargeAmperes(0);
     setExtraChargeNotes('');
     loadData();
   };
@@ -422,7 +431,7 @@ export default function DebtsView() {
         </Button>
         <Button variant="outline" onClick={() => setExtraChargeDialog(true)}>
           <PlusCircle className="h-4 w-4 ml-1" />
-          חיוב נוסף
+          אמפרים נוספים
         </Button>
         <Button variant="outline" onClick={() => setCashPayDialog(true)}>
           <Banknote className="h-4 w-4 ml-1" />
@@ -616,18 +625,25 @@ export default function DebtsView() {
                 setAdvanceCustomerId(v);
                 const c = allActiveCustomers.find(c => c.id === Number(v));
                 if (c) {
-                  const amt = c.paymentMethod === 'mixed' ? c.cashAmount : c.monthlyAmount;
+                  const ppa = settings?.pricePerAmpere || 0;
+                  const monthlyAmt = getCustomerMonthlyAmount(c, ppa);
+                  const amt = c.paymentMethod === 'mixed' ? c.cashAmount : monthlyAmt;
                   setAdvanceAmount(amt);
                   if (advanceMode === 'months') setAdvanceTotalAmount(amt * advanceMonths);
                 }
               }}>
                 <SelectTrigger><SelectValue placeholder="בחר לקוח" /></SelectTrigger>
                 <SelectContent>
-                  {allActiveCustomers.map(c => (
+                  {allActiveCustomers.map(c => {
+                    const ppa = settings?.pricePerAmpere || 0;
+                    const monthlyAmt = getCustomerMonthlyAmount(c, ppa);
+                    const amt = c.paymentMethod === 'mixed' ? c.cashAmount : monthlyAmt;
+                    return (
                     <SelectItem key={c.id} value={String(c.id)}>
-                      {c.nickname || c.fullName} (₪{(c.paymentMethod === 'mixed' ? c.cashAmount : c.monthlyAmount).toLocaleString()}/חודש • {c.paymentMethod === 'bank' ? 'בנק' : c.paymentMethod === 'mixed' ? 'משולב' : 'מזומן'})
+                      {c.nickname || c.fullName} ({c.amperes || 0} אמפר • ₪{amt.toLocaleString()}/חודש • {c.paymentMethod === 'bank' ? 'בנק' : c.paymentMethod === 'mixed' ? 'משולב' : 'מזומן'})
                     </SelectItem>
-                  ))}
+                    );
+                  })}
                 </SelectContent>
               </Select>
             </div>
@@ -734,8 +750,8 @@ export default function DebtsView() {
       <Dialog open={extraChargeDialog} onOpenChange={setExtraChargeDialog}>
         <DialogContent onPointerDownOutside={e => e.preventDefault()}>
           <DialogHeader>
-            <DialogTitle>חיוב נוסף</DialogTitle>
-            <DialogDescription>הוסף חיוב חד-פעמי לחודש הנוכחי — ישולם במזומן</DialogDescription>
+            <DialogTitle>אמפרים נוספים</DialogTitle>
+            <DialogDescription>הוסף אמפרים נוספים לחודש הנוכחי בלבד — ייתוסף כחיוב על גבי האמפרים הקבועים</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
@@ -752,8 +768,13 @@ export default function DebtsView() {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>סכום (₪)</Label>
-              <Input type="number" dir="ltr" value={extraChargeAmount || ''} onChange={e => setExtraChargeAmount(Number(e.target.value) || 0)} placeholder="למשל 200" />
+              <Label>כמות אמפרים נוספים</Label>
+              <Input type="number" dir="ltr" value={extraChargeAmperes || ''} onChange={e => setExtraChargeAmperes(Number(e.target.value) || 0)} placeholder="למשל 5" />
+              {extraChargeAmperes > 0 && (settings?.pricePerAmpere || 0) > 0 && (
+                <p className="text-sm text-muted-foreground">
+                  סכום: ₪{(extraChargeAmperes * (settings?.pricePerAmpere || 0)).toLocaleString()} ({extraChargeAmperes} × ₪{settings?.pricePerAmpere})
+                </p>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label>הערה</Label>
@@ -762,9 +783,9 @@ export default function DebtsView() {
           </div>
           <div className="flex justify-end gap-3">
             <Button variant="secondary" onClick={() => setExtraChargeDialog(false)}>ביטול</Button>
-            <Button onClick={handleExtraCharge} disabled={!extraChargeCustomerId || extraChargeAmount <= 0}>
+            <Button onClick={handleExtraCharge} disabled={!extraChargeCustomerId || extraChargeAmperes <= 0}>
               <PlusCircle className="h-4 w-4 ml-1" />
-              צור חיוב
+              הוסף אמפרים
             </Button>
           </div>
         </DialogContent>

@@ -100,6 +100,7 @@ export function parseCSVCustomers(text: string): Omit<Customer, 'id' | 'createdA
       paymentMethod: 'bank',
       bankAmount: 0,
       cashAmount: 0,
+      amperes: 0,
       monthlyAmount,
       billingCycle: 'monthly',
       startDate: new Date().toISOString().split('T')[0],

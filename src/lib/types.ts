@@ -16,7 +16,8 @@ export interface Customer {
   accountHolderName: string;
   authorizationRef: string;
   authorizationDate: string;
-  monthlyAmount: number;
+  amperes: number; // number of amperes per month
+  monthlyAmount: number; // computed: amperes * pricePerAmpere (kept for backward compat)
   billingCycle: 'monthly' | 'custom';
   startDate: string;
   endDate: string;
@@ -81,6 +82,7 @@ export interface Settings {
   branchNumber: string;
   accountNumber: string;
   defaultBillingDay: number;
+  pricePerAmpere: number;
 }
 
 export interface ActivityLog {
@@ -103,6 +105,7 @@ export const DEFAULT_SETTINGS: Settings = {
   branchNumber: '',
   accountNumber: '',
   defaultBillingDay: 1,
+  pricePerAmpere: 0,
 };
 
 export const EMPTY_CUSTOMER: Omit<Customer, 'id' | 'createdAt' | 'updatedAt'> = {
@@ -122,6 +125,7 @@ export const EMPTY_CUSTOMER: Omit<Customer, 'id' | 'createdAt' | 'updatedAt'> = 
   accountHolderName: '',
   authorizationRef: '',
   authorizationDate: '',
+  amperes: 0,
   monthlyAmount: 0,
   billingCycle: 'monthly',
   startDate: new Date().toISOString().split('T')[0],
