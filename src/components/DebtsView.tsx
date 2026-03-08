@@ -235,6 +235,14 @@ export default function DebtsView() {
     if (totalUsed > 0) parts.push(`₪${totalUsed.toLocaleString()} כיסו חובות קיימים`);
     if (monthsToPayFull > 0) parts.push(`${monthsToPayFull} חודשים שולמו מראש`);
     if (remainder > 0) parts.push(`₪${remainder.toLocaleString()} עודף לחודש הבא`);
+    await addActivity({
+      type: 'advance',
+      description: `תשלום מראש: ${parts.join(' • ')} — ${cust.nickname || cust.fullName}`,
+      customerId: cust.id,
+      customerName: cust.nickname || cust.fullName,
+      amount: advanceMode === 'amount' ? advanceTotalAmount : advanceAmount * advanceMonths,
+      createdAt: new Date().toISOString(),
+    });
     toast.success(parts.join(' • ') || 'התשלום בוצע');
 
     setAdvanceDialog(false);
