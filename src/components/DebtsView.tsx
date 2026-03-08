@@ -431,7 +431,7 @@ export default function DebtsView() {
         </Button>
         <Button variant="outline" onClick={() => setExtraChargeDialog(true)}>
           <PlusCircle className="h-4 w-4 ml-1" />
-          חיוב נוסף
+          אמפרים נוספים
         </Button>
         <Button variant="outline" onClick={() => setCashPayDialog(true)}>
           <Banknote className="h-4 w-4 ml-1" />
