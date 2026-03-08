@@ -32,6 +32,19 @@ export default function DebtsView() {
   const [advanceTotalAmount, setAdvanceTotalAmount] = useState(0);
   const [advanceMonths, setAdvanceMonths] = useState(1);
   const [advanceAmount, setAdvanceAmount] = useState(0);
+  const [deleteTarget, setDeleteTarget] = useState<DebtRecord | null>(null);
+  // Extra charge dialog
+  const [extraChargeDialog, setExtraChargeDialog] = useState(false);
+  const [extraChargeCustomerId, setExtraChargeCustomerId] = useState('');
+  const [extraChargeAmount, setExtraChargeAmount] = useState(0);
+  const [extraChargeNotes, setExtraChargeNotes] = useState('');
+  // Cash override dialog
+  const [cashOverrideDialog, setCashOverrideDialog] = useState(false);
+  const [cashOverrideCustomerId, setCashOverrideCustomerId] = useState('');
+  const [cashOverrideMonth, setCashOverrideMonth] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  });
 
   const loadData = () => {
     Promise.all([getAllCustomers(), getAllDebts()])
