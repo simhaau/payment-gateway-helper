@@ -101,24 +101,29 @@ export default function CustomerDialog({ open, onOpenChange, customer, groups, o
       toast.error('סכום הבנק + מזומן חייב להיות שווה לסכום החודשי');
       return;
     }
-    const now = new Date().toISOString();
-    const data = {
-      fullName, nickname, idNumber, phone, email, address, notes,
-      paymentMethod, bankAmount, cashAmount,
-      bankNumber, branchNumber, accountNumber, accountHolderName,
-      authorizationRef, authorizationDate, monthlyAmount,
-      billingCycle, startDate, endDate,
-      chargeFrequencyMonths: 1, status, groupId, tags: [] as string[],
-    };
-    if (isEdit && customer) {
-      await updateCustomer({ ...customer, ...data, updatedAt: now });
-      toast.success('הלקוח עודכן');
-    } else {
-      await addCustomer({ ...data, createdAt: now, updatedAt: now });
-      toast.success('לקוח נוסף');
+    try {
+      const now = new Date().toISOString();
+      const data = {
+        fullName, nickname, idNumber, phone, email, address, notes,
+        paymentMethod, bankAmount, cashAmount,
+        bankNumber, branchNumber, accountNumber, accountHolderName,
+        authorizationRef, authorizationDate, monthlyAmount,
+        billingCycle, startDate, endDate,
+        chargeFrequencyMonths: 1, status, groupId, tags: [] as string[],
+      };
+      if (isEdit && customer) {
+        await updateCustomer({ ...customer, ...data, updatedAt: now });
+        toast.success('הלקוח עודכן');
+      } else {
+        await addCustomer({ ...data, createdAt: now, updatedAt: now });
+        toast.success('לקוח נוסף');
+      }
+      onOpenChange(false);
+      onSaved();
+    } catch (err) {
+      console.error('Save failed:', err);
+      toast.error('שגיאה בשמירת הלקוח: ' + (err instanceof Error ? err.message : 'שגיאה לא ידועה'));
     }
-    onOpenChange(false);
-    onSaved();
   }, [fullName, nickname, idNumber, phone, email, address, notes, paymentMethod, bankAmount, cashAmount, bankNumber, branchNumber, accountNumber, accountHolderName, authorizationRef, authorizationDate, monthlyAmount, billingCycle, startDate, endDate, status, groupId, isEdit, customer, onOpenChange, onSaved]);
 
   const paymentMethodOptions = [
@@ -316,8 +321,8 @@ export default function CustomerDialog({ open, onOpenChange, customer, groups, o
 
           {/* Actions */}
           <div className="flex justify-end gap-3 pt-2">
-            <Button variant="secondary" onClick={() => onOpenChange(false)}>ביטול</Button>
-            <Button onClick={handleSave}>{isEdit ? 'שמור שינויים' : 'הוסף לקוח'}</Button>
+            <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>ביטול</Button>
+            <Button type="button" onClick={handleSave}>{isEdit ? 'שמור שינויים' : 'הוסף לקוח'}</Button>
           </div>
         </div>
       </DialogContent>
