@@ -9,6 +9,30 @@ import type { Settings } from '@/lib/types';
 import { DEFAULT_SETTINGS } from '@/lib/types';
 import { toast } from 'sonner';
 
+interface SettingsFieldProps {
+  label: string;
+  field: keyof Settings;
+  value: string | number;
+  onChange: (field: keyof Settings, value: string | number) => void;
+  dir?: string;
+  placeholder?: string;
+}
+
+function SettingsField({ label, field, value, onChange, dir, placeholder }: SettingsFieldProps) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs text-muted-foreground">{label}</Label>
+      <Input
+        value={String(value || '')}
+        onChange={e => onChange(field, field === 'defaultBillingDay' ? Number(e.target.value) : e.target.value)}
+        dir={dir}
+        placeholder={placeholder}
+        type={field === 'defaultBillingDay' ? 'number' : 'text'}
+      />
+    </div>
+  );
+}
+
 export default function SettingsView() {
   const [form, setForm] = useState<Settings>(DEFAULT_SETTINGS);
 
@@ -16,7 +40,9 @@ export default function SettingsView() {
     getSettings().then(s => setForm(s));
   }, []);
 
-  const set = (field: keyof Settings, value: any) => setForm(prev => ({ ...prev, [field]: value }));
+  const set = (field: keyof Settings, value: string | number) => {
+    setForm(prev => ({ ...prev, [field]: value }));
+  };
 
   const handleSave = async () => {
     await saveSettings(form);
@@ -33,19 +59,6 @@ export default function SettingsView() {
     toast.success('הנתונים יוצאו');
   };
 
-  const Field = ({ label, field, dir, placeholder }: { label: string; field: keyof Settings; dir?: string; placeholder?: string }) => (
-    <div className="space-y-1.5">
-      <Label className="text-xs text-muted-foreground">{label}</Label>
-      <Input
-        value={String(form[field] || '')}
-        onChange={e => set(field, field === 'defaultBillingDay' ? Number(e.target.value) : e.target.value)}
-        dir={dir}
-        placeholder={placeholder}
-        type={field === 'defaultBillingDay' ? 'number' : 'text'}
-      />
-    </div>
-  );
-
   return (
     <div className="space-y-6 animate-fade-in max-w-2xl">
       <Card className="glass-card">
@@ -56,10 +69,10 @@ export default function SettingsView() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <Field label="שם הארגון" field="organizationName" placeholder="שם החברה / העמותה" />
+          <SettingsField label="שם הארגון" field="organizationName" value={form.organizationName} onChange={set} placeholder="שם החברה / העמותה" />
           <div className="grid grid-cols-2 gap-4">
-            <Field label="קוד שולח מסב" field="masavSenderCode" dir="ltr" placeholder="00000000" />
-            <Field label="קוד מוסד" field="institutionCode" dir="ltr" placeholder="00000" />
+            <SettingsField label="קוד שולח מסב" field="masavSenderCode" value={form.masavSenderCode} onChange={set} dir="ltr" placeholder="00000000" />
+            <SettingsField label="קוד מוסד" field="institutionCode" value={form.institutionCode} onChange={set} dir="ltr" placeholder="00000" />
           </div>
         </CardContent>
       </Card>
@@ -70,12 +83,12 @@ export default function SettingsView() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-3 gap-4">
-            <Field label="מספר בנק" field="bankNumber" dir="ltr" placeholder="12" />
-            <Field label="מספר סניף" field="branchNumber" dir="ltr" placeholder="345" />
-            <Field label="מספר חשבון" field="accountNumber" dir="ltr" placeholder="123456789" />
+            <SettingsField label="מספר בנק" field="bankNumber" value={form.bankNumber} onChange={set} dir="ltr" placeholder="12" />
+            <SettingsField label="מספר סניף" field="branchNumber" value={form.branchNumber} onChange={set} dir="ltr" placeholder="345" />
+            <SettingsField label="מספר חשבון" field="accountNumber" value={form.accountNumber} onChange={set} dir="ltr" placeholder="123456789" />
           </div>
           <div className="mt-4">
-            <Field label="יום חיוב ברירת מחדל (1-28)" field="defaultBillingDay" dir="ltr" placeholder="1" />
+            <SettingsField label="יום חיוב ברירת מחדל (1-28)" field="defaultBillingDay" value={form.defaultBillingDay} onChange={set} dir="ltr" placeholder="1" />
           </div>
         </CardContent>
       </Card>
@@ -92,3 +105,4 @@ export default function SettingsView() {
     </div>
   );
 }
+
