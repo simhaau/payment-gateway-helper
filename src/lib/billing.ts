@@ -29,7 +29,7 @@ export function createBillingBatch(
     return {
       customerId: c.id!,
       customerName: c.fullName,
-      amount: c.monthlyAmount,
+      amount: (c.paymentMethod === 'mixed' ? (c.bankAmount || c.monthlyAmount) : c.monthlyAmount),
       bankNumber: c.bankNumber,
       branchNumber: c.branchNumber,
       accountNumber: c.accountNumber,
