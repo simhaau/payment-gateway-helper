@@ -271,34 +271,37 @@ export default function DebtsView() {
   };
 
   const handleExtraCharge = async () => {
-    if (!extraChargeCustomerId || extraChargeAmount <= 0) return;
+    if (!extraChargeCustomerId || extraChargeAmperes <= 0) return;
     const cust = customers.find(c => c.id === Number(extraChargeCustomerId));
     if (!cust) return;
+    const pricePerAmpere = settings?.pricePerAmpere || 0;
+    const extraAmount = extraChargeAmperes * pricePerAmpere;
+    if (extraAmount <= 0) { toast.error('הגדר מחיר לאמפר בהגדרות'); return; }
     const now = new Date();
     const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     await addDebt({
       customerId: cust.id!,
       customerName: cust.nickname || cust.fullName,
       month,
-      amount: extraChargeAmount,
+      amount: extraAmount,
       paidAmount: 0,
       status: 'unpaid',
       paidDate: '',
-      notes: extraChargeNotes || 'חיוב נוסף',
+      notes: extraChargeNotes || `${extraChargeAmperes} אמפר נוספים`,
       createdAt: now.toISOString(),
     });
     await addActivity({
       type: 'extra_charge',
-      description: `חיוב נוסף: ₪${extraChargeAmount.toLocaleString()} ל${cust.nickname || cust.fullName} (${extraChargeNotes || 'חיוב נוסף'})`,
+      description: `אמפרים נוספים: ${extraChargeAmperes} אמפר (₪${extraAmount.toLocaleString()}) ל${cust.nickname || cust.fullName} (${extraChargeNotes || 'חיוב נוסף'})`,
       customerId: cust.id,
       customerName: cust.nickname || cust.fullName,
-      amount: extraChargeAmount,
+      amount: extraAmount,
       createdAt: now.toISOString(),
     });
-    toast.success(`חיוב נוסף של ₪${extraChargeAmount.toLocaleString()} נוצר ל${cust.nickname || cust.fullName}`);
+    toast.success(`${extraChargeAmperes} אמפר נוספים (₪${extraAmount.toLocaleString()}) נוצרו ל${cust.nickname || cust.fullName}`);
     setExtraChargeDialog(false);
     setExtraChargeCustomerId('');
-    setExtraChargeAmount(0);
+    setExtraChargeAmperes(0);
     setExtraChargeNotes('');
     loadData();
   };
