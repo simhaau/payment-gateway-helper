@@ -312,7 +312,7 @@ export default function CustomersView() {
             })}
             {paged.length === 0 && (
               <TableRow>
-                <TableCell colSpan={10} className="text-center py-12 text-muted-foreground">
+                <TableCell colSpan={12} className="text-center py-12 text-muted-foreground">
                   {customers.length === 0 ? 'אין לקוחות עדיין. הוסף לקוח חדש כדי להתחיל.' : 'לא נמצאו תוצאות'}
                 </TableCell>
               </TableRow>
