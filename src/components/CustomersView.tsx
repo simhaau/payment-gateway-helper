@@ -45,8 +45,8 @@ export default function CustomersView() {
   const [bulkGroupId, setBulkGroupId] = useState<string>('');
 
   const loadData = () => {
-    Promise.all([getAllCustomers(), getAllGroups()])
-      .then(([c, g]) => { setCustomers(c); setGroups(g); });
+    Promise.all([getAllCustomers(), getAllGroups(), getSettings()])
+      .then(([c, g, s]) => { setCustomers(c); setGroups(g); setSettings(s); });
   };
 
   useEffect(() => { loadData(); }, []);
