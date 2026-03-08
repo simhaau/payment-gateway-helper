@@ -47,6 +47,12 @@ export default function CustomerDetailView({ customer, onBack }: Props) {
   const currentMonthPaid = currentMonthDebts.reduce((s, d) => s + d.paidAmount, 0);
   const currentMonthBalance = currentMonthTotal - currentMonthPaid;
 
+  // Breakdown: base vs extras
+  const baseDebts = useMemo(() => currentMonthDebts.filter(d => !d.notes || (!d.notes.includes('אמפרים נוספים') && !d.notes.includes('חיוב נוסף'))), [currentMonthDebts]);
+  const extraDebts = useMemo(() => currentMonthDebts.filter(d => d.notes && (d.notes.includes('אמפרים נוספים') || d.notes.includes('חיוב נוסף'))), [currentMonthDebts]);
+  const baseTotal = baseDebts.reduce((s, d) => s + d.amount, 0);
+  const extrasTotal = extraDebts.reduce((s, d) => s + d.amount, 0);
+
   // Overall stats
   const totalEverCharged = useMemo(() => debts.reduce((s, d) => s + d.amount, 0), [debts]);
   const totalEverPaid = useMemo(() => debts.reduce((s, d) => s + d.paidAmount, 0), [debts]);
