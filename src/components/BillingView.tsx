@@ -55,15 +55,19 @@ export default function BillingView() {
     return due;
   };
 
-  // Get unpaid debts for bank customers (extra charges)
+  // Get unpaid debts for bank customers (extra charges) — only current month
   const getExtraDebts = (): DebtRecord[] => {
     if (!includeExtraDebts) return [];
     const targets = getTargetCustomers();
     const targetIds = new Set(targets.map(c => c.id!));
+    const now = new Date();
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     return debts.filter(d =>
       targetIds.has(d.customerId) &&
+      d.month === currentMonth &&
       d.status !== 'paid' &&
       d.status !== 'advance' &&
+      d.status !== 'suspended' &&
       d.notes // Only include debts with notes (extra charges)
     );
   };

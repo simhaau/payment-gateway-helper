@@ -33,6 +33,7 @@ export default function BulkChargeView() {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
   const [notes, setNotes] = useState('');
+  const [spreadMonths, setSpreadMonths] = useState(1); // multi-month support
   const [confirmDialog, setConfirmDialog] = useState(false);
   const [creating, setCreating] = useState(false);
 
@@ -95,33 +96,41 @@ export default function BulkChargeView() {
         : `חיוב גורף${notes ? ': ' + notes : ''}`;
 
       let count = 0;
-      for (const c of targetCustomers) {
-        await addDebt({
-          customerId: c.id!,
-          customerName: c.fullName,
-          month,
-          amount: chargeAmount,
-          paidAmount: 0,
-          status: 'unpaid',
-          paidDate: '',
-          notes: noteText,
-          createdAt: now,
-        });
-        count++;
+      // Create debts for each month in the spread
+      for (let m = 0; m < spreadMonths; m++) {
+        const [y, mo] = month.split('-').map(Number);
+        const targetDate = new Date(y, mo - 1 + m);
+        const targetMonth = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}`;
+        for (const c of targetCustomers) {
+          await addDebt({
+            customerId: c.id!,
+            customerName: c.fullName,
+            month: targetMonth,
+            amount: chargeAmount,
+            paidAmount: 0,
+            status: 'unpaid',
+            paidDate: '',
+            notes: spreadMonths > 1 ? `${noteText} (${m + 1}/${spreadMonths})` : noteText,
+            createdAt: now,
+          });
+          count++;
+        }
       }
 
+      const totalCount = targetCustomers.length;
       await addActivity({
         type: 'extra_charge',
-        description: `חיוב גורף ₪${chargeAmount.toLocaleString()} ל-${count} לקוחות (${month}) — ${noteText}`,
+        description: `חיוב גורף ₪${chargeAmount.toLocaleString()} ל-${totalCount} לקוחות${spreadMonths > 1 ? ` × ${spreadMonths} חודשים` : ''} (${month}) — ${noteText}`,
         amount: chargeAmount * count,
         createdAt: now,
       });
 
-      toast.success(`חיוב ₪${chargeAmount.toLocaleString()} נוסף ל-${count} לקוחות`);
+      toast.success(`חיוב ₪${chargeAmount.toLocaleString()} נוסף ל-${totalCount} לקוחות${spreadMonths > 1 ? ` ל-${spreadMonths} חודשים` : ''}`);
       setConfirmDialog(false);
       setAmount(0);
       setAmperes(0);
       setNotes('');
+      setSpreadMonths(1);
       loadData();
     } catch (e) {
       toast.error('שגיאה ביצירת חיוב גורף');
@@ -221,12 +230,19 @@ export default function BulkChargeView() {
               <Label className="text-xs text-muted-foreground">הערות</Label>
               <Textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="תיאור החיוב..." rows={1} />
             </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">פריסה לחודשים</Label>
+              <Input type="number" min={1} max={24} value={spreadMonths} onChange={e => setSpreadMonths(Math.max(1, Number(e.target.value)))} />
+              {spreadMonths > 1 && (
+                <p className="text-xs text-muted-foreground">₪{chargeAmount.toLocaleString()} × {spreadMonths} חודשים = ₪{(chargeAmount * spreadMonths).toLocaleString()} סה"כ לכל לקוח</p>
+              )}
+            </div>
           </div>
 
           <div className="flex items-center gap-4 mt-4">
             <Button onClick={() => setConfirmDialog(true)} disabled={chargeAmount <= 0 || targetCustomers.length === 0} className="gap-2">
               <Plus className="h-4 w-4" />
-              הוסף חיוב ל-{targetCustomers.length} לקוחות (₪{chargeAmount.toLocaleString()} כ"א)
+              הוסף חיוב ל-{targetCustomers.length} לקוחות (₪{chargeAmount.toLocaleString()} כ"א{spreadMonths > 1 ? ` × ${spreadMonths} חודשים` : ''})
             </Button>
             <Button variant="destructive" onClick={() => setCancelDialog(true)} className="gap-2">
               <Trash2 className="h-4 w-4" />
@@ -289,8 +305,9 @@ export default function BulkChargeView() {
           <AlertDialogHeader>
             <AlertDialogTitle>אישור חיוב גורף</AlertDialogTitle>
             <AlertDialogDescription>
-              ייווצר חיוב על סך ₪{chargeAmount.toLocaleString()} ל-{targetCustomers.length} לקוחות עבור חודש {month}.
-              <br />סה"כ: ₪{(chargeAmount * targetCustomers.length).toLocaleString()}
+              ייווצר חיוב על סך ₪{chargeAmount.toLocaleString()} ל-{targetCustomers.length} לקוחות
+              {spreadMonths > 1 ? ` לכל אחד מ-${spreadMonths} חודשים החל מ-${month}` : ` עבור חודש ${month}`}.
+              <br />סה"כ: ₪{(chargeAmount * targetCustomers.length * spreadMonths).toLocaleString()}
               {notes && <><br />הערות: {notes}</>}
             </AlertDialogDescription>
           </AlertDialogHeader>

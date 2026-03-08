@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { ArrowRight, User, CreditCard, Banknote, Calendar, TrendingUp, TrendingDown, AlertCircle, CheckCircle2, Clock, Zap, Building2, Shuffle, FileText, Plus, Trash2, EyeOff, Eye, Pencil } from 'lucide-react';
+import { ArrowRight, User, CreditCard, Banknote, Calendar, TrendingUp, TrendingDown, AlertCircle, CheckCircle2, Clock, Zap, Building2, Shuffle, FileText, Plus, Trash2, EyeOff, Eye, Pencil, Download, FileSpreadsheet, CalendarClock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -104,7 +104,23 @@ export default function CustomerDetailView({ customer, onBack }: Props) {
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }, [batches, customer.id]);
 
-  // Monthly breakdown sorted desc
+  // Future months with debts
+  const futureMonthDebts = useMemo(() => {
+    return debts.filter(d => d.month > currentMonth);
+  }, [debts, currentMonth]);
+
+  const futureMonthBreakdown = useMemo(() => {
+    const map = new Map<string, { debts: DebtRecord[]; total: number }>();
+    futureMonthDebts.forEach(d => {
+      const existing = map.get(d.month) || { debts: [], total: 0 };
+      existing.debts.push(d);
+      if (d.status !== 'suspended') existing.total += d.amount;
+      map.set(d.month, existing);
+    });
+    return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b)).map(([month, data]) => ({ month, ...data }));
+  }, [futureMonthDebts]);
+
+  // Monthly breakdown sorted desc (only past + current)
   const monthlyBreakdown = useMemo(() => {
     const map = new Map<string, { debts: DebtRecord[]; total: number; paid: number }>();
     debts.forEach(d => {
@@ -222,6 +238,70 @@ export default function CustomerDetailView({ customer, onBack }: Props) {
     setEditDialog(null);
     loadData();
   };
+  // --- Report Export ---
+  const handleExportCustomerPDF = async () => {
+    try {
+      const { default: jsPDF } = await import('jspdf');
+      await import('jspdf-autotable');
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+      doc.setFontSize(16);
+      const title = `Report: ${customer.fullName} (${customer.nickname || ''})`;
+      doc.text(title, doc.internal.pageSize.width / 2, 15, { align: 'center' });
+      doc.setFontSize(10);
+      doc.text(`Generated: ${new Date().toLocaleDateString('he-IL')}`, doc.internal.pageSize.width / 2, 22, { align: 'center' });
+      
+      const tableData = monthlyBreakdown.map(m => [
+        m.debts.map(d => d.status === 'paid' ? 'Paid' : d.status === 'suspended' ? 'Suspended' : 'Unpaid').join(', '),
+        m.balance.toLocaleString(),
+        m.paid.toLocaleString(),
+        m.total.toLocaleString(),
+        m.debts.length.toString(),
+        m.month,
+      ]);
+      tableData.push([
+        '', totalEverCharged - totalEverPaid > 0 ? (totalEverCharged - totalEverPaid).toLocaleString() : '0',
+        totalEverPaid.toLocaleString(), totalEverCharged.toLocaleString(), debts.length.toString(), 'Total',
+      ]);
+      (doc as any).autoTable({
+        startY: 28,
+        head: [['Status', 'Balance', 'Paid', 'Total', 'Charges', 'Month']],
+        body: tableData,
+        styles: { halign: 'center', fontSize: 9 },
+        headStyles: { fillColor: [59, 130, 246] },
+        alternateRowStyles: { fillColor: [248, 250, 252] },
+      });
+      doc.save(`customer_${customer.id}_report.pdf`);
+      toast.success('PDF יוצא בהצלחה');
+    } catch (e) {
+      toast.error('שגיאה בייצוא PDF');
+    }
+  };
+
+  const handleExportCustomerExcel = async () => {
+    try {
+      const XLSX = await import('xlsx');
+      const wsData = [
+        [`דוח לקוח: ${customer.fullName}`],
+        [],
+        ['חודש', 'מספר חיובים', 'סה"כ', 'שולם', 'יתרה', 'סטטוס'],
+        ...monthlyBreakdown.map(m => [
+          m.month, m.debts.length, m.total, m.paid, m.balance,
+          m.debts.every(d => d.status === 'paid') ? 'שולם' : m.balance > 0 ? 'חוב' : 'לא שולם',
+        ]),
+        [],
+        ['סה"כ', debts.length, totalEverCharged, totalEverPaid, totalEverCharged - totalEverPaid, ''],
+      ];
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+      ws['!cols'] = [{ wch: 12 }, { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 10 }];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'דוח');
+      XLSX.writeFile(wb, `customer_${customer.id}_report.xlsx`);
+      toast.success('Excel יוצא בהצלחה');
+    } catch (e) {
+      toast.error('שגיאה בייצוא Excel');
+    }
+  };
+
 
   const paymentMethodLabel = {
     bank: { label: 'הוראת קבע (בנק)', icon: Building2, color: 'text-primary' },
@@ -301,10 +381,20 @@ export default function CustomerDetailView({ customer, onBack }: Props) {
             <Badge className={statusLabel.color}>{statusLabel.label}</Badge>
           </div>
         </div>
-        <Button onClick={() => setAddChargeDialog(true)} className="gap-2">
-          <Plus className="h-4 w-4" />
-          הוסף חיוב
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button onClick={() => setAddChargeDialog(true)} className="gap-2">
+            <Plus className="h-4 w-4" />
+            הוסף חיוב
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleExportCustomerPDF} className="gap-1">
+            <FileText className="h-3.5 w-3.5" />
+            PDF
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleExportCustomerExcel} className="gap-1">
+            <FileSpreadsheet className="h-3.5 w-3.5" />
+            Excel
+          </Button>
+        </div>
       </div>
 
       {/* Quick Info Cards */}
@@ -517,6 +607,42 @@ export default function CustomerDetailView({ customer, onBack }: Props) {
           </CardContent>
         </Card>
       </div>
+
+      {/* Future Month Charges */}
+      {futureMonthBreakdown.length > 0 && (
+        <Card className="glass-card border-warning/30">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <CalendarClock className="h-4 w-4 text-warning" />
+              חיובים עתידיים ({futureMonthDebts.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {futureMonthBreakdown.map(fm => (
+                <div key={fm.month} className="rounded-lg border border-border/50 overflow-hidden">
+                  <div className="flex items-center justify-between bg-warning/5 px-4 py-2">
+                    <span className="font-mono text-sm font-medium" dir="ltr">{fm.month}</span>
+                    <span className="text-sm font-medium">₪{fm.total.toLocaleString()}</span>
+                  </div>
+                  <Table>
+                    <TableBody>
+                      {fm.debts.map(d => (
+                        <TableRow key={d.id} className={`hover:bg-muted/30 ${d.status === 'suspended' ? 'opacity-50' : ''}`}>
+                          <TableCell className="text-sm">{d.notes || 'חיוב'}</TableCell>
+                          <TableCell className="font-medium">₪{d.amount.toLocaleString()}</TableCell>
+                          <TableCell>{getDebtStatusBadge(d.status)}</TableCell>
+                          <TableCell className="text-left">{renderChargeActions(d)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Detailed Monthly Breakdown */}
       <Card className="glass-card">
