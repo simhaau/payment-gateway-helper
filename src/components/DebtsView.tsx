@@ -277,6 +277,14 @@ export default function DebtsView() {
       notes: extraChargeNotes || 'חיוב נוסף',
       createdAt: now.toISOString(),
     });
+    await addActivity({
+      type: 'extra_charge',
+      description: `חיוב נוסף: ₪${extraChargeAmount.toLocaleString()} ל${cust.nickname || cust.fullName} (${extraChargeNotes || 'חיוב נוסף'})`,
+      customerId: cust.id,
+      customerName: cust.nickname || cust.fullName,
+      amount: extraChargeAmount,
+      createdAt: now.toISOString(),
+    });
     toast.success(`חיוב נוסף של ₪${extraChargeAmount.toLocaleString()} נוצר ל${cust.nickname || cust.fullName}`);
     setExtraChargeDialog(false);
     setExtraChargeCustomerId('');
