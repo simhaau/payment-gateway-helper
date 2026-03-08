@@ -126,6 +126,35 @@ export default function CustomersView() {
     a.click();
   };
 
+  const handleImportCSV = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.csv,.txt';
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const parsed = parseCSVCustomers(text);
+        if (parsed.length === 0) {
+          toast.error('לא נמצאו לקוחות בקובץ');
+          return;
+        }
+        const now = new Date().toISOString();
+        let added = 0;
+        for (const c of parsed) {
+          await addCustomer({ ...c, createdAt: now, updatedAt: now });
+          added++;
+        }
+        toast.success(`${added} לקוחות יובאו בהצלחה`);
+        loadData();
+      } catch (err) {
+        toast.error('שגיאה בייבוא הקובץ');
+      }
+    };
+    input.click();
+  };
+
   const groupName = (gid: number | null) => {
     if (!gid) return '';
     return groups.find(g => g.id === gid)?.name || '';
