@@ -48,8 +48,8 @@ export default function DebtsView() {
   const [cashPayAmount, setCashPayAmount] = useState(0);
 
   const loadData = () => {
-    Promise.all([getAllCustomers(), getAllDebts()])
-      .then(([c, d]) => { setCustomers(c); setDebts(d); });
+    Promise.all([getAllCustomers(), getAllDebts(), getSettings()])
+      .then(([c, d, s]) => { setCustomers(c); setDebts(d); setSettings(s); });
   };
 
   useEffect(() => { loadData(); }, []);
