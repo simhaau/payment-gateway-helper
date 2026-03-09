@@ -4,26 +4,31 @@ export interface Customer {
   nickname: string;
   idNumber: string;
   phone: string;
+  phone2: string;
   email: string;
-  address: string;
+  city: string;
+  street: string;
+  houseNumber: string;
+  address: string; // kept for backward compat, computed from city+street+houseNumber
   notes: string;
   paymentMethod: 'bank' | 'cash' | 'mixed';
-  bankAmount: number; // for mixed: amount via bank
-  cashAmount: number; // for mixed: amount via cash
+  bankAmount: number;
+  cashAmount: number;
   bankNumber: string;
   branchNumber: string;
   accountNumber: string;
   accountHolderName: string;
   authorizationRef: string;
   authorizationDate: string;
-  amperes: number; // number of amperes per month
-  monthlyAmount: number; // computed: amperes * pricePerAmpere (kept for backward compat)
+  amperes: number;
+  monthlyAmount: number;
   billingCycle: 'monthly' | 'custom';
   startDate: string;
   endDate: string;
   chargeFrequencyMonths: number;
   status: 'active' | 'paused' | 'cancelled';
   groupId: number | null;
+  phaseId: number | null;
   tags: string[];
   createdAt: string;
   updatedAt: string;
@@ -37,6 +42,13 @@ export interface Group {
   createdAt: string;
 }
 
+export interface Phase {
+  id?: number;
+  name: string;
+  description: string;
+  createdAt: string;
+}
+
 export interface DebtRecord {
   id?: number;
   customerId: number;
@@ -44,7 +56,7 @@ export interface DebtRecord {
   month: string; // YYYY-MM
   amount: number;
   paidAmount: number;
-  status: 'unpaid' | 'partial' | 'paid' | 'advance' | 'suspended';
+  status: 'unpaid' | 'partial' | 'paid' | 'advance' | 'suspended' | 'pending_collection';
   paidDate: string;
   notes: string;
   createdAt: string;
@@ -68,7 +80,7 @@ export interface BillingBatch {
   valueDate: string;
   totalAmount: number;
   transactionCount: number;
-  status: 'pending' | 'generated' | 'exported';
+  status: 'pending' | 'generated' | 'exported' | 'collected';
   transactions: BillingTransaction[];
   createdAt: string;
 }
@@ -82,17 +94,18 @@ export interface Settings {
   branchNumber: string;
   accountNumber: string;
   defaultBillingDay: number;
+  billingCycleDay: number; // day of month when billing cycle resets
   pricePerAmpere: number;
 }
 
 export interface ActivityLog {
   id?: number;
-  type: 'payment' | 'batch' | 'extra_charge' | 'advance' | 'debt_created' | 'debt_deleted' | 'cash_override' | 'other';
+  type: 'payment' | 'batch' | 'extra_charge' | 'advance' | 'debt_created' | 'debt_deleted' | 'cash_override' | 'batch_collected' | 'other';
   description: string;
   customerId?: number;
   customerName?: string;
   amount?: number;
-  relatedId?: number; // debt or batch id
+  relatedId?: number;
   createdAt: string;
 }
 
@@ -105,6 +118,7 @@ export const DEFAULT_SETTINGS: Settings = {
   branchNumber: '',
   accountNumber: '',
   defaultBillingDay: 1,
+  billingCycleDay: 1,
   pricePerAmpere: 0,
 };
 
@@ -113,7 +127,11 @@ export const EMPTY_CUSTOMER: Omit<Customer, 'id' | 'createdAt' | 'updatedAt'> = 
   nickname: '',
   idNumber: '',
   phone: '',
+  phone2: '',
   email: '',
+  city: '',
+  street: '',
+  houseNumber: '',
   address: '',
   notes: '',
   paymentMethod: 'bank',
@@ -133,5 +151,6 @@ export const EMPTY_CUSTOMER: Omit<Customer, 'id' | 'createdAt' | 'updatedAt'> = 
   chargeFrequencyMonths: 1,
   status: 'active',
   groupId: null,
+  phaseId: null,
   tags: [],
 };
