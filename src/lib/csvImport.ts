@@ -87,7 +87,11 @@ export function parseCSVCustomers(text: string): Omit<Customer, 'id' | 'createdA
       fullName,
       idNumber: getVal('idNumber'),
       phone: getVal('phone'),
+      phone2: '',
       email: getVal('email'),
+      city: '',
+      street: '',
+      houseNumber: '',
       address: getVal('address'),
       notes: getVal('notes'),
       bankNumber: getVal('bankNumber'),
@@ -108,6 +112,7 @@ export function parseCSVCustomers(text: string): Omit<Customer, 'id' | 'createdA
       chargeFrequencyMonths: 1,
       status: 'active',
       groupId: null,
+      phaseId: null,
       tags: [],
     });
   }
