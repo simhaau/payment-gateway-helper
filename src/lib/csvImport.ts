@@ -114,6 +114,7 @@ export function parseCSVCustomers(text: string): Omit<Customer, 'id' | 'createdA
       groupId: null,
       phaseId: null,
       tags: [],
+      balance: 0,
     });
   }
 

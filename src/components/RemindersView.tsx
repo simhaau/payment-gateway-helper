@@ -77,8 +77,9 @@ export default function RemindersView() {
       const nextDate = new Date(r.dueDate);
       nextDate.setMonth(nextDate.getMonth() + 1);
       nextDate.setDate(r.recurringDay);
+      const { id: _id, ...rest } = r;
       await addReminder({
-        ...r, id: undefined, dueDate: nextDate.toISOString().split('T')[0], completed: false, completedAt: '', createdAt: new Date().toISOString(),
+        ...rest, dueDate: nextDate.toISOString().split('T')[0], completed: false, completedAt: '', createdAt: new Date().toISOString(),
       });
       toast.success('תזכורת הושלמה — תזכורת הבאה נוצרה');
     } else {
