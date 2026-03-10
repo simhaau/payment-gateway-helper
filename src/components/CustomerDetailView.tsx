@@ -241,38 +241,25 @@ export default function CustomerDetailView({ customer, onBack }: Props) {
   // --- Report Export ---
   const handleExportCustomerPDF = async () => {
     try {
-      const { default: jsPDF } = await import('jspdf');
-      await import('jspdf-autotable');
-      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-      doc.setFontSize(16);
-      const title = `Report: ${customer.fullName} (${customer.nickname || ''})`;
-      doc.text(title, doc.internal.pageSize.width / 2, 15, { align: 'center' });
-      doc.setFontSize(10);
-      doc.text(`Generated: ${new Date().toLocaleDateString('he-IL')}`, doc.internal.pageSize.width / 2, 22, { align: 'center' });
-      
-      const tableData = monthlyBreakdown.map(m => [
-        m.debts.map(d => d.status === 'paid' ? 'Paid' : d.status === 'suspended' ? 'Suspended' : 'Unpaid').join(', '),
-        m.balance.toLocaleString(),
-        m.paid.toLocaleString(),
-        m.total.toLocaleString(),
-        m.debts.length.toString(),
-        m.month,
-      ]);
-      tableData.push([
-        '', totalEverCharged - totalEverPaid > 0 ? (totalEverCharged - totalEverPaid).toLocaleString() : '0',
-        totalEverPaid.toLocaleString(), totalEverCharged.toLocaleString(), debts.length.toString(), 'Total',
-      ]);
-      (doc as any).autoTable({
-        startY: 28,
-        head: [['Status', 'Balance', 'Paid', 'Total', 'Charges', 'Month']],
-        body: tableData,
-        styles: { halign: 'center', fontSize: 9 },
-        headStyles: { fillColor: [59, 130, 246] },
-        alternateRowStyles: { fillColor: [248, 250, 252] },
+      const { exportTableToPDF } = await import('@/lib/pdfExport');
+      await exportTableToPDF({
+        title: `דוח לקוח: ${customer.fullName}${customer.nickname ? ` (${customer.nickname})` : ''}`,
+        subtitle: `אמפרים: ${customer.amperes || 0} • סכום חודשי: ₪${monthlyAmount.toLocaleString()} • חוב פתוח: ₪${openDebtTotal.toLocaleString()}`,
+        headers: ['חודש', 'חיובים', 'סה"כ', 'שולם', 'יתרה', 'סטטוס'],
+        rows: monthlyBreakdown.map(m => [
+          m.month,
+          m.debts.length.toString(),
+          `₪${m.total.toLocaleString()}`,
+          `₪${m.paid.toLocaleString()}`,
+          `₪${m.balance.toLocaleString()}`,
+          m.debts.filter(d => d.status !== 'suspended').every(d => d.status === 'paid') ? 'שולם' : m.balance > 0 ? 'חוב' : 'לא שולם',
+        ]),
+        totalsRow: ['סה"כ', debts.length.toString(), `₪${totalEverCharged.toLocaleString()}`, `₪${totalEverPaid.toLocaleString()}`, `₪${(totalEverCharged - totalEverPaid).toLocaleString()}`, ''],
+        filename: `customer_${customer.id}_report.pdf`,
       });
-      doc.save(`customer_${customer.id}_report.pdf`);
       toast.success('PDF יוצא בהצלחה');
     } catch (e) {
+      console.error('PDF export error:', e);
       toast.error('שגיאה בייצוא PDF');
     }
   };
