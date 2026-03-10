@@ -9,7 +9,7 @@ export interface Customer {
   city: string;
   street: string;
   houseNumber: string;
-  address: string; // kept for backward compat, computed from city+street+houseNumber
+  address: string;
   notes: string;
   paymentMethod: 'bank' | 'cash' | 'mixed';
   bankAmount: number;
@@ -30,6 +30,7 @@ export interface Customer {
   groupId: number | null;
   phaseId: number | null;
   tags: string[];
+  balance: number; // credit balance (positive = customer has credit)
   createdAt: string;
   updatedAt: string;
 }
@@ -49,15 +50,31 @@ export interface Phase {
   createdAt: string;
 }
 
+export interface Reminder {
+  id?: number;
+  title: string;
+  description: string;
+  dueDate: string;
+  recurring: boolean;
+  recurringDay: number; // day of month for recurring
+  color: string;
+  completed: boolean;
+  completedAt: string;
+  customerId?: number;
+  customerName?: string;
+  createdAt: string;
+}
+
 export interface DebtRecord {
   id?: number;
   customerId: number;
   customerName: string;
-  month: string; // YYYY-MM
+  month: string;
   amount: number;
   paidAmount: number;
   status: 'unpaid' | 'partial' | 'paid' | 'advance' | 'suspended' | 'pending_collection';
   paidDate: string;
+  paymentMethod?: 'bank' | 'cash' | 'mixed'; // how it was paid
   notes: string;
   createdAt: string;
 }
@@ -94,18 +111,22 @@ export interface Settings {
   branchNumber: string;
   accountNumber: string;
   defaultBillingDay: number;
-  billingCycleDay: number; // day of month when billing cycle resets
+  billingCycleDay: number;
   pricePerAmpere: number;
+  primaryColor: string;
+  secondaryColor: string;
 }
 
 export interface ActivityLog {
   id?: number;
-  type: 'payment' | 'batch' | 'extra_charge' | 'advance' | 'debt_created' | 'debt_deleted' | 'cash_override' | 'batch_collected' | 'other';
+  type: 'payment' | 'batch' | 'extra_charge' | 'advance' | 'debt_created' | 'debt_deleted' | 'cash_override' | 'batch_collected' | 'bulk_charge' | 'batch_cancelled' | 'reminder' | 'customer_created' | 'customer_updated' | 'customer_deleted' | 'settings_updated' | 'phase_created' | 'group_created' | 'other';
   description: string;
   customerId?: number;
   customerName?: string;
   amount?: number;
   relatedId?: number;
+  reversible?: boolean;
+  reverseData?: string; // JSON string with data to reverse the action
   createdAt: string;
 }
 
@@ -120,6 +141,8 @@ export const DEFAULT_SETTINGS: Settings = {
   defaultBillingDay: 1,
   billingCycleDay: 1,
   pricePerAmpere: 0,
+  primaryColor: '',
+  secondaryColor: '',
 };
 
 export const EMPTY_CUSTOMER: Omit<Customer, 'id' | 'createdAt' | 'updatedAt'> = {
@@ -153,4 +176,5 @@ export const EMPTY_CUSTOMER: Omit<Customer, 'id' | 'createdAt' | 'updatedAt'> = 
   groupId: null,
   phaseId: null,
   tags: [],
+  balance: 0,
 };

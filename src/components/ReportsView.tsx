@@ -1,17 +1,19 @@
 import { useState, useEffect, useMemo } from 'react';
-import { FileText, FileSpreadsheet, BarChart3, TrendingUp, TrendingDown, Users } from 'lucide-react';
+import { FileText, FileSpreadsheet, BarChart3, TrendingUp, TrendingDown, Users, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { getAllCustomers, getAllGroups, getAllDebts, getAllBatches, getSettings } from '@/lib/db';
+import { getAllCustomers, getAllGroups, getAllDebts, getAllBatches, getSettings, getAllPhases } from '@/lib/db';
 import { getCustomerMonthlyAmount } from '@/lib/billing';
-import type { Customer, Group, DebtRecord, BillingBatch, Settings } from '@/lib/types';
+import { exportTableToPDF } from '@/lib/pdfExport';
+import type { Customer, Group, DebtRecord, BillingBatch, Settings, Phase } from '@/lib/types';
 import { toast } from 'sonner';
 
-type ReportScope = 'all' | 'group' | 'single';
+type ReportScope = 'all' | 'group' | 'single' | 'phase';
 type ReportPeriod = 'monthly' | 'yearly';
 
 interface ReportRow {
@@ -25,18 +27,22 @@ interface ReportRow {
   pendingAmount: number;
   balance: number;
   status: string;
+  paymentMethod: string;
 }
 
 export default function ReportsView() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
+  const [phases, setPhases] = useState<Phase[]>([]);
   const [debts, setDebts] = useState<DebtRecord[]>([]);
   const [batches, setBatches] = useState<BillingBatch[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
 
   const [scope, setScope] = useState<ReportScope>('all');
   const [groupId, setGroupId] = useState('');
+  const [phaseId, setPhaseId] = useState('');
   const [customerId, setCustomerId] = useState('');
+  const [customerSearch, setCustomerSearch] = useState('');
   const [period, setPeriod] = useState<ReportPeriod>('monthly');
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date();
@@ -45,17 +51,24 @@ export default function ReportsView() {
   const [selectedYear, setSelectedYear] = useState(() => String(new Date().getFullYear()));
 
   useEffect(() => {
-    Promise.all([getAllCustomers(), getAllGroups(), getAllDebts(), getAllBatches(), getSettings()])
-      .then(([c, g, d, b, s]) => { setCustomers(c); setGroups(g); setDebts(d); setBatches(b); setSettings(s); });
+    Promise.all([getAllCustomers(), getAllGroups(), getAllDebts(), getAllBatches(), getSettings(), getAllPhases()])
+      .then(([c, g, d, b, s, p]) => { setCustomers(c); setGroups(g); setDebts(d); setBatches(b); setSettings(s); setPhases(p); });
   }, []);
 
   const pricePerAmpere = settings?.pricePerAmpere || 0;
 
+  const filteredCustomersList = useMemo(() => {
+    if (!customerSearch) return customers;
+    const q = customerSearch.toLowerCase();
+    return customers.filter(c => c.fullName.toLowerCase().includes(q) || (c.nickname || '').toLowerCase().includes(q) || c.phone.includes(q));
+  }, [customers, customerSearch]);
+
   const targetCustomers = useMemo(() => {
     if (scope === 'group' && groupId) return customers.filter(c => String(c.groupId) === groupId);
+    if (scope === 'phase' && phaseId) return customers.filter(c => String(c.phaseId) === phaseId);
     if (scope === 'single' && customerId) return customers.filter(c => String(c.id) === customerId);
     return customers;
-  }, [customers, scope, groupId, customerId]);
+  }, [customers, scope, groupId, phaseId, customerId]);
 
   const targetCustomerIds = useMemo(() => new Set(targetCustomers.map(c => c.id!)), [targetCustomers]);
 
@@ -71,6 +84,7 @@ export default function ReportsView() {
 
   const reportRows = useMemo((): ReportRow[] => {
     const map = new Map<string, ReportRow>();
+    const customerMap = new Map(customers.map(c => [c.id!, c]));
 
     for (const c of targetCustomers) {
       const customerDebts = filteredDebts.filter(d => d.customerId === c.id!);
@@ -92,6 +106,8 @@ export default function ReportsView() {
         else if (paid > 0) status = 'חלקי';
         else if (customerDebts.some(d => d.status === 'suspended')) status = 'מושהה';
 
+        const pm = c.paymentMethod === 'cash' ? 'מזומן' : c.paymentMethod === 'mixed' ? 'משולב' : 'בנק';
+
         map.set(key, {
           customerName: c.nickname || c.fullName,
           customerId: c.id!,
@@ -103,6 +119,7 @@ export default function ReportsView() {
           pendingAmount: pending,
           balance: (total || expectedBase) - paid,
           status,
+          paymentMethod: pm,
         });
       } else {
         const months = new Set(customerDebts.map(d => d.month));
@@ -117,6 +134,7 @@ export default function ReportsView() {
           yearPending += mDebts.filter(d => d.status === 'pending_collection').reduce((s, d) => s + d.amount, 0);
         }
         const total = yearBase + yearExtra;
+        const pm = c.paymentMethod === 'cash' ? 'מזומן' : c.paymentMethod === 'mixed' ? 'משולב' : 'בנק';
         map.set(`${c.id}-year`, {
           customerName: c.nickname || c.fullName,
           customerId: c.id!,
@@ -128,11 +146,12 @@ export default function ReportsView() {
           pendingAmount: yearPending,
           balance: total - yearPaid,
           status: total > 0 && yearPaid >= total ? 'שולם' : yearPending > 0 ? 'ממתין לגביה' : yearPaid > 0 ? 'חלקי' : 'לא שולם',
+          paymentMethod: pm,
         });
       }
     }
     return Array.from(map.values()).sort((a, b) => a.customerName.localeCompare(b.customerName));
-  }, [targetCustomers, filteredDebts, period, selectedMonth, selectedYear, pricePerAmpere]);
+  }, [targetCustomers, filteredDebts, period, selectedMonth, selectedYear, pricePerAmpere, customers]);
 
   const totals = useMemo(() => ({
     base: reportRows.reduce((s, r) => s + r.baseAmount, 0),
@@ -143,7 +162,7 @@ export default function ReportsView() {
     balance: reportRows.reduce((s, r) => s + r.balance, 0),
   }), [reportRows]);
 
-  const scopeLabel = scope === 'all' ? 'כל הלקוחות' : scope === 'group' ? (groups.find(g => String(g.id) === groupId)?.name || 'קבוצה') : (targetCustomers[0]?.nickname || targetCustomers[0]?.fullName || 'לקוח');
+  const scopeLabel = scope === 'all' ? 'כל הלקוחות' : scope === 'group' ? (groups.find(g => String(g.id) === groupId)?.name || 'קבוצה') : scope === 'phase' ? (phases.find(p => String(p.id) === phaseId)?.name || 'פזה') : (targetCustomers[0]?.nickname || targetCustomers[0]?.fullName || 'לקוח');
   const periodLabel = period === 'monthly' ? selectedMonth : selectedYear;
   const reportTitle = `דוח ${period === 'monthly' ? 'חודשי' : 'שנתי'} — ${scopeLabel} — ${periodLabel}`;
 
@@ -160,15 +179,15 @@ export default function ReportsView() {
       const wsData = [
         [reportTitle],
         [],
-        ['שם לקוח', 'חיוב בסיסי', 'חיובים נוספים', 'סה"כ', 'שולם', 'ממתין לגביה', 'יתרה', 'סטטוס'],
-        ...reportRows.map(r => [r.customerName, r.baseAmount, r.extraAmount, r.totalAmount, r.paidAmount, r.pendingAmount, r.balance, r.status]),
+        ['#', 'שם לקוח', 'אופן תשלום', 'חיוב בסיסי', 'חיובים נוספים', 'סה"כ', 'שולם', 'ממתין לגביה', 'יתרה', 'סטטוס'],
+        ...reportRows.map((r, i) => [i + 1, r.customerName, r.paymentMethod, r.baseAmount, r.extraAmount, r.totalAmount, r.paidAmount, r.pendingAmount, r.balance, r.status]),
         [],
-        ['סה"כ', totals.base, totals.extra, totals.total, totals.paid, totals.pending, totals.balance, ''],
+        ['', 'סה"כ', '', totals.base, totals.extra, totals.total, totals.paid, totals.pending, totals.balance, ''],
       ];
       const ws = XLSX.utils.aoa_to_sheet(wsData);
-      ws['!cols'] = [{ wch: 22 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 12 }];
+      ws['!cols'] = [{ wch: 5 }, { wch: 22 }, { wch: 10 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 12 }];
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Report');
+      XLSX.utils.book_append_sheet(wb, ws, 'דוח');
       XLSX.writeFile(wb, `report_${periodLabel}_${scope}.xlsx`);
       toast.success('Excel יוצא בהצלחה');
     } catch (e) {
@@ -179,89 +198,23 @@ export default function ReportsView() {
 
   const handleExportPDF = async () => {
     try {
-      const jsPDFModule = await import('jspdf');
-      const jsPDF = jsPDFModule.default || jsPDFModule.jsPDF;
-      await import('jspdf-autotable');
-
-      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-      const pageW = doc.internal.pageSize.width;
-
-      // Title area
-      doc.setFontSize(14);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Collection Report', pageW / 2, 14, { align: 'center' });
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'normal');
-      doc.text(`Period: ${periodLabel} | Scope: ${scope === 'all' ? 'All' : scope} | Generated: ${new Date().toLocaleDateString('en-GB')}`, pageW / 2, 20, { align: 'center' });
-
-      // Summary line
-      doc.setFontSize(8);
-      doc.text(
-        `Total: ${totals.total.toLocaleString()} NIS | Paid: ${totals.paid.toLocaleString()} NIS | Pending: ${totals.pending.toLocaleString()} NIS | Balance: ${totals.balance.toLocaleString()} NIS`,
-        pageW / 2, 25, { align: 'center' }
-      );
-
-      const tableData = reportRows.map((r, i) => [
-        i + 1,
-        r.customerName,
-        r.baseAmount.toLocaleString(),
-        r.extraAmount > 0 ? r.extraAmount.toLocaleString() : '-',
-        r.totalAmount.toLocaleString(),
-        r.paidAmount.toLocaleString(),
-        r.pendingAmount > 0 ? r.pendingAmount.toLocaleString() : '-',
-        r.balance.toLocaleString(),
-        r.status === 'שולם' ? 'Paid' : r.status === 'ממתין לגביה' ? 'Pending' : r.status === 'חלקי' ? 'Partial' : 'Unpaid',
-      ]);
-
-      tableData.push([
-        '', 'TOTAL',
-        totals.base.toLocaleString(),
-        totals.extra > 0 ? totals.extra.toLocaleString() : '-',
-        totals.total.toLocaleString(),
-        totals.paid.toLocaleString(),
-        totals.pending > 0 ? totals.pending.toLocaleString() : '-',
-        totals.balance.toLocaleString(),
-        '',
-      ]);
-
-      (doc as any).autoTable({
-        startY: 30,
-        head: [['#', 'Customer', 'Base (NIS)', 'Extras', 'Total', 'Paid', 'Pending', 'Balance', 'Status']],
-        body: tableData,
-        styles: { halign: 'center', fontSize: 8, cellPadding: 2.5 },
-        headStyles: { fillColor: [59, 130, 246], textColor: 255, fontStyle: 'bold', fontSize: 8 },
-        alternateRowStyles: { fillColor: [248, 250, 252] },
-        columnStyles: {
-          0: { cellWidth: 10, halign: 'center' },
-          1: { cellWidth: 40, halign: 'left' },
-          8: { cellWidth: 18, halign: 'center' },
-        },
-        didParseCell: (data: any) => {
-          // Bold last row
-          if (data.row.index === tableData.length - 1) {
-            data.cell.styles.fontStyle = 'bold';
-            data.cell.styles.fillColor = [229, 231, 235];
-          }
-          // Color balance column
-          if (data.column.index === 7 && data.row.index < tableData.length - 1) {
-            const val = reportRows[data.row.index]?.balance;
-            if (val !== undefined && val > 0) data.cell.styles.textColor = [220, 38, 38];
-            else data.cell.styles.textColor = [22, 163, 74];
-          }
-        },
-        margin: { top: 30, right: 14, bottom: 14, left: 14 },
+      await exportTableToPDF({
+        title: reportTitle,
+        subtitle: `${reportRows.length} לקוחות • סה"כ: ₪${totals.total.toLocaleString()} • שולם: ₪${totals.paid.toLocaleString()} • יתרה: ₪${totals.balance.toLocaleString()}`,
+        headers: ['#', 'שם לקוח', 'תשלום', 'בסיסי', 'נוספים', 'סה"כ', 'שולם', 'ממתין', 'יתרה', 'סטטוס'],
+        rows: reportRows.map((r, i) => [
+          i + 1, r.customerName, r.paymentMethod,
+          `₪${r.baseAmount.toLocaleString()}`,
+          r.extraAmount > 0 ? `₪${r.extraAmount.toLocaleString()}` : '—',
+          `₪${r.totalAmount.toLocaleString()}`,
+          `₪${r.paidAmount.toLocaleString()}`,
+          r.pendingAmount > 0 ? `₪${r.pendingAmount.toLocaleString()}` : '—',
+          `₪${r.balance.toLocaleString()}`,
+          r.status,
+        ]),
+        totalsRow: ['', 'סה"כ', '', `₪${totals.base.toLocaleString()}`, `₪${totals.extra.toLocaleString()}`, `₪${totals.total.toLocaleString()}`, `₪${totals.paid.toLocaleString()}`, `₪${totals.pending.toLocaleString()}`, `₪${totals.balance.toLocaleString()}`, ''],
+        filename: `report_${periodLabel}_${scope}.pdf`,
       });
-
-      // Footer
-      const totalPages = (doc as any).internal.getNumberOfPages();
-      for (let i = 1; i <= totalPages; i++) {
-        doc.setPage(i);
-        doc.setFontSize(7);
-        doc.setTextColor(150);
-        doc.text(`Page ${i}/${totalPages}`, pageW - 14, doc.internal.pageSize.height - 7, { align: 'right' });
-      }
-
-      doc.save(`report_${periodLabel}_${scope}.pdf`);
       toast.success('PDF יוצא בהצלחה');
     } catch (e) {
       console.error('PDF export error:', e);
@@ -283,14 +236,14 @@ export default function ReportsView() {
     <div className="space-y-6 animate-fade-in">
       {/* Config */}
       <Card className="glass-card">
-        <CardHeader>
+        <CardHeader className="pb-4">
           <CardTitle className="text-lg flex items-center gap-2">
             <BarChart3 className="h-5 w-5 text-primary" />
             מערכת דוחות
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">היקף</Label>
               <Select value={scope} onValueChange={(v: ReportScope) => setScope(v)}>
@@ -298,6 +251,7 @@ export default function ReportsView() {
                 <SelectContent>
                   <SelectItem value="all">כל הלקוחות</SelectItem>
                   <SelectItem value="group">לפי קבוצה</SelectItem>
+                  <SelectItem value="phase">לפי פזה</SelectItem>
                   <SelectItem value="single">לקוח בודד</SelectItem>
                 </SelectContent>
               </Select>
@@ -313,13 +267,25 @@ export default function ReportsView() {
                 </Select>
               </div>
             )}
+            {scope === 'phase' && (
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">פזה</Label>
+                <Select value={phaseId} onValueChange={setPhaseId}>
+                  <SelectTrigger><SelectValue placeholder="בחר פזה" /></SelectTrigger>
+                  <SelectContent>
+                    {phases.map(p => <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             {scope === 'single' && (
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">לקוח</Label>
                 <Select value={customerId} onValueChange={setCustomerId}>
                   <SelectTrigger><SelectValue placeholder="בחר לקוח" /></SelectTrigger>
                   <SelectContent>
-                    {customers.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.nickname || c.fullName}</SelectItem>)}
+                    <div className="p-2"><Input placeholder="חפש..." value={customerSearch} onChange={e => setCustomerSearch(e.target.value)} className="h-8" /></div>
+                    {filteredCustomersList.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.nickname || c.fullName}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -410,7 +376,7 @@ export default function ReportsView() {
 
       {/* Table */}
       <Card className="glass-card">
-        <CardHeader>
+        <CardHeader className="pb-3">
           <CardTitle className="text-base">{reportTitle}</CardTitle>
         </CardHeader>
         <CardContent>
@@ -418,7 +384,9 @@ export default function ReportsView() {
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/50">
+                  <TableHead className="w-10">#</TableHead>
                   <TableHead>שם לקוח</TableHead>
+                  <TableHead>תשלום</TableHead>
                   <TableHead>בסיסי</TableHead>
                   <TableHead>נוספים</TableHead>
                   <TableHead>סה"כ</TableHead>
@@ -429,9 +397,11 @@ export default function ReportsView() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {reportRows.map(r => (
+                {reportRows.map((r, i) => (
                   <TableRow key={`${r.customerId}-${r.month}`} className="hover:bg-muted/30">
+                    <TableCell className="text-muted-foreground text-xs">{i + 1}</TableCell>
                     <TableCell className="font-medium">{r.customerName}</TableCell>
+                    <TableCell><Badge variant="outline" className="text-[10px]">{r.paymentMethod}</Badge></TableCell>
                     <TableCell>₪{r.baseAmount.toLocaleString()}</TableCell>
                     <TableCell className={r.extraAmount > 0 ? 'text-warning font-medium' : 'text-muted-foreground'}>
                       {r.extraAmount > 0 ? `₪${r.extraAmount.toLocaleString()}` : '—'}
@@ -449,14 +419,16 @@ export default function ReportsView() {
                 ))}
                 {reportRows.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={10} className="text-center py-12 text-muted-foreground">
                       אין נתונים לתקופה שנבחרה
                     </TableCell>
                   </TableRow>
                 )}
                 {reportRows.length > 0 && (
                   <TableRow className="bg-muted/50 font-bold">
+                    <TableCell></TableCell>
                     <TableCell>סה"כ</TableCell>
+                    <TableCell></TableCell>
                     <TableCell>₪{totals.base.toLocaleString()}</TableCell>
                     <TableCell className="text-warning">₪{totals.extra.toLocaleString()}</TableCell>
                     <TableCell>₪{totals.total.toLocaleString()}</TableCell>

@@ -1,7 +1,7 @@
-import { Customer, Group, BillingBatch, Settings, DebtRecord, ActivityLog, DEFAULT_SETTINGS } from './types';
+import { Customer, Group, Phase, Reminder, BillingBatch, Settings, DebtRecord, ActivityLog, DEFAULT_SETTINGS } from './types';
 
 const DB_NAME = 'masav_collection_system';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 const BACKUP_KEY = 'masav_backup';
 
@@ -13,28 +13,18 @@ function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     const timeout = setTimeout(() => {
-      reject(new Error('IndexedDB open timed out (possible blocked upgrade)'));
+      reject(new Error('IndexedDB open timed out'));
     }, 10000);
 
     const clear = () => clearTimeout(timeout);
 
-    req.onerror = () => {
-      clear();
-      reject(req.error);
-    };
-
-    req.onblocked = () => {
-      clear();
-      reject(new Error('IndexedDB is blocked by another open tab/version'));
-    };
+    req.onerror = () => { clear(); reject(req.error); };
+    req.onblocked = () => { clear(); reject(new Error('IndexedDB blocked')); };
 
     req.onsuccess = () => {
       clear();
       dbInstance = req.result;
-      dbInstance.onversionchange = () => {
-        dbInstance?.close();
-        dbInstance = null;
-      };
+      dbInstance.onversionchange = () => { dbInstance?.close(); dbInstance = null; };
       resolve(dbInstance);
     };
 
@@ -65,10 +55,19 @@ function openDB(): Promise<IDBDatabase> {
         ds.createIndex('status', 'status');
       }
       if (!db.objectStoreNames.contains('activities')) {
-        const as = db.createObjectStore('activities', { keyPath: 'id', autoIncrement: true });
-        as.createIndex('type', 'type');
-        as.createIndex('customerId', 'customerId');
-        as.createIndex('createdAt', 'createdAt');
+        const as2 = db.createObjectStore('activities', { keyPath: 'id', autoIncrement: true });
+        as2.createIndex('type', 'type');
+        as2.createIndex('customerId', 'customerId');
+        as2.createIndex('createdAt', 'createdAt');
+      }
+      // New stores in v4
+      if (!db.objectStoreNames.contains('phases')) {
+        db.createObjectStore('phases', { keyPath: 'id', autoIncrement: true });
+      }
+      if (!db.objectStoreNames.contains('reminders')) {
+        const rs = db.createObjectStore('reminders', { keyPath: 'id', autoIncrement: true });
+        rs.createIndex('dueDate', 'dueDate');
+        rs.createIndex('completed', 'completed');
       }
     };
   });
@@ -112,7 +111,7 @@ export async function restoreFromBackupIfNeeded(): Promise<boolean> {
     
     const db = await openDB();
     for (const storeName of ['groups', 'customers', 'batches', 'debts']) {
-      const data = backup[storeName === 'batches' ? 'batches' : storeName];
+      const data = backup[storeName];
       if (data?.length) {
         const tx = db.transaction(storeName, 'readwrite');
         const store = tx.objectStore(storeName);
@@ -121,7 +120,6 @@ export async function restoreFromBackupIfNeeded(): Promise<boolean> {
       }
     }
     if (backup.settings) await saveSettings(backup.settings);
-    console.log('Data restored from backup:', backup.backupDate);
     return true;
   } catch (e) {
     console.warn('Restore from backup failed:', e);
@@ -132,7 +130,7 @@ export async function restoreFromBackupIfNeeded(): Promise<boolean> {
 export async function importData(jsonString: string): Promise<void> {
   const data = JSON.parse(jsonString);
   const db = await openDB();
-  for (const storeName of ['groups', 'customers', 'batches', 'debts']) {
+  for (const storeName of ['groups', 'customers', 'batches', 'debts', 'phases', 'reminders']) {
     const items = data[storeName];
     if (items?.length) {
       const tx = db.transaction(storeName, 'readwrite');
@@ -200,6 +198,47 @@ export async function deleteGroup(id: number): Promise<void> {
   const store = await txStore('groups', 'readwrite');
   await reqToPromise(store.delete(id));
   scheduleBackup();
+}
+
+// PHASES
+export async function getAllPhases(): Promise<Phase[]> {
+  const store = await txStore('phases', 'readonly');
+  return reqToPromise(store.getAll());
+}
+export async function addPhase(p: Omit<Phase, 'id'>): Promise<number> {
+  const store = await txStore('phases', 'readwrite');
+  const id = (await reqToPromise(store.add(p))) as number;
+  scheduleBackup();
+  return id;
+}
+export async function updatePhase(p: Phase): Promise<void> {
+  const store = await txStore('phases', 'readwrite');
+  await reqToPromise(store.put(p));
+  scheduleBackup();
+}
+export async function deletePhase(id: number): Promise<void> {
+  const store = await txStore('phases', 'readwrite');
+  await reqToPromise(store.delete(id));
+  scheduleBackup();
+}
+
+// REMINDERS
+export async function getAllReminders(): Promise<Reminder[]> {
+  const store = await txStore('reminders', 'readonly');
+  return reqToPromise(store.getAll());
+}
+export async function addReminder(r: Omit<Reminder, 'id'>): Promise<number> {
+  const store = await txStore('reminders', 'readwrite');
+  const id = (await reqToPromise(store.add(r))) as number;
+  return id;
+}
+export async function updateReminder(r: Reminder): Promise<void> {
+  const store = await txStore('reminders', 'readwrite');
+  await reqToPromise(store.put(r));
+}
+export async function deleteReminder(id: number): Promise<void> {
+  const store = await txStore('reminders', 'readwrite');
+  await reqToPromise(store.delete(id));
 }
 
 // BATCHES
@@ -280,8 +319,8 @@ export async function deleteActivity(id: number): Promise<void> {
 
 // EXPORT DATA
 export async function exportAllData(): Promise<string> {
-  const [customers, groups, batches, settings, debts, activities] = await Promise.all([
-    getAllCustomers(), getAllGroups(), getAllBatches(), getSettings(), getAllDebts(), getAllActivities()
+  const [customers, groups, batches, settings, debts, activities, phases, reminders] = await Promise.all([
+    getAllCustomers(), getAllGroups(), getAllBatches(), getSettings(), getAllDebts(), getAllActivities(), getAllPhases(), getAllReminders()
   ]);
-  return JSON.stringify({ customers, groups, batches, settings, debts, activities }, null, 2);
+  return JSON.stringify({ customers, groups, batches, settings, debts, activities, phases, reminders }, null, 2);
 }

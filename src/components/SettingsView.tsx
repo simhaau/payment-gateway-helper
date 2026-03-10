@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
-import { Save, Building2, Upload } from 'lucide-react';
+import { Save, Building2, Upload, Download, Plus, Trash2, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { getSettings, saveSettings, exportAllData, importData } from '@/lib/db';
-import type { Settings } from '@/lib/types';
+import { Badge } from '@/components/ui/badge';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { getSettings, saveSettings, exportAllData, importData, getAllPhases, addPhase, deletePhase, addActivity } from '@/lib/db';
+import type { Settings, Phase } from '@/lib/types';
 import { DEFAULT_SETTINGS } from '@/lib/types';
 import { toast } from 'sonner';
 
@@ -38,9 +40,12 @@ function SettingsField({ label, field, value, onChange, dir, placeholder, descri
 
 export default function SettingsView() {
   const [form, setForm] = useState<Settings>(DEFAULT_SETTINGS);
+  const [phases, setPhases] = useState<Phase[]>([]);
+  const [newPhaseName, setNewPhaseName] = useState('');
+  const [deletePhaseId, setDeletePhaseId] = useState<number | null>(null);
 
   useEffect(() => {
-    getSettings().then(s => setForm(s));
+    Promise.all([getSettings(), getAllPhases()]).then(([s, p]) => { setForm(s); setPhases(p); });
   }, []);
 
   const set = (field: keyof Settings, value: string | number) => {
@@ -49,7 +54,27 @@ export default function SettingsView() {
 
   const handleSave = async () => {
     await saveSettings(form);
+    await addActivity({ type: 'settings_updated', description: 'הגדרות המערכת עודכנו', createdAt: new Date().toISOString() });
     toast.success('ההגדרות נשמרו');
+  };
+
+  const handleAddPhase = async () => {
+    if (!newPhaseName.trim()) return;
+    await addPhase({ name: newPhaseName, description: '', createdAt: new Date().toISOString() });
+    await addActivity({ type: 'phase_created', description: `פזה חדשה: ${newPhaseName}`, createdAt: new Date().toISOString() });
+    setNewPhaseName('');
+    const p = await getAllPhases();
+    setPhases(p);
+    toast.success('פזה נוספה');
+  };
+
+  const handleDeletePhase = async () => {
+    if (deletePhaseId === null) return;
+    await deletePhase(deletePhaseId);
+    setDeletePhaseId(null);
+    const p = await getAllPhases();
+    setPhases(p);
+    toast.success('פזה נמחקה');
   };
 
   const handleExportData = async () => {
@@ -64,7 +89,7 @@ export default function SettingsView() {
 
   const handleDownloadTemplate = () => {
     const headers = ['fullName', 'nickname', 'idNumber', 'phone', 'phone2', 'email', 'city', 'street', 'houseNumber', 'paymentMethod', 'bankNumber', 'branchNumber', 'accountNumber', 'accountHolderName', 'amperes', 'status', 'notes'];
-    const example = ['Israel Israeli', 'ישראל ישראלי', '123456789', '050-1234567', '', 'email@example.com', 'תל אביב', 'הרצל', '10', 'bank', '12', '345', '123456', 'Israel Israeli', '25', 'active', ''];
+    const example = ['Israel Israeli', 'ישראל', '123456789', '050-1234567', '', 'email@example.com', 'תל אביב', 'הרצל', '10', 'bank', '12', '345', '123456', 'Israel Israeli', '25', 'active', ''];
     const csv = [headers.join(','), example.join(',')].join('\n');
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a');
@@ -75,7 +100,7 @@ export default function SettingsView() {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in max-w-2xl">
+    <div className="space-y-6 animate-fade-in max-w-3xl">
       <Card className="glass-card">
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
@@ -120,13 +145,48 @@ export default function SettingsView() {
         </CardContent>
       </Card>
 
+      {/* Phases Management */}
+      <Card className="glass-card">
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Zap className="h-5 w-5 text-warning" />
+            ניהול פזות
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex gap-2">
+            <Input value={newPhaseName} onChange={e => setNewPhaseName(e.target.value)} placeholder="שם הפזה..." className="flex-1"
+              onKeyDown={e => e.key === 'Enter' && handleAddPhase()} />
+            <Button onClick={handleAddPhase} disabled={!newPhaseName.trim()} className="gap-1">
+              <Plus className="h-4 w-4" />
+              הוסף
+            </Button>
+          </div>
+          {phases.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">אין פזות עדיין</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {phases.map(p => (
+                <Badge key={p.id} variant="secondary" className="gap-1 pr-1 text-sm">
+                  {p.name}
+                  <button onClick={() => setDeletePhaseId(p.id!)} className="hover:text-destructive transition-colors p-0.5 rounded">
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                </Badge>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       <div className="flex gap-3 flex-wrap">
         <Button onClick={handleSave} className="gap-2">
           <Save className="h-4 w-4" />
           שמור הגדרות
         </Button>
-        <Button variant="secondary" onClick={handleExportData}>
-          ייצוא נתונים (גיבוי)
+        <Button variant="secondary" onClick={handleExportData} className="gap-2">
+          <Download className="h-4 w-4" />
+          ייצוא נתונים
         </Button>
         <Button variant="secondary" className="gap-2" onClick={() => {
           const input = document.createElement('input');
@@ -153,6 +213,19 @@ export default function SettingsView() {
           הורד תבנית ייבוא CSV
         </Button>
       </div>
+
+      <AlertDialog open={deletePhaseId !== null} onOpenChange={() => setDeletePhaseId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>מחיקת פזה</AlertDialogTitle>
+            <AlertDialogDescription>האם למחוק את הפזה? לקוחות המשויכים אליה לא ימחקו.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>ביטול</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeletePhase} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">מחק</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

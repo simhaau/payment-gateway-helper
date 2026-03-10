@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { LayoutDashboard, Users, FolderKanban, CreditCard, Settings, Banknote, History, BarChart3, Zap } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { LayoutDashboard, Users, FolderKanban, CreditCard, Settings, Banknote, History, BarChart3, Zap, Bell } from 'lucide-react';
 import DashboardView from '@/components/DashboardView';
 import CustomersView from '@/components/CustomersView';
 import GroupsView from '@/components/GroupsView';
@@ -9,6 +9,7 @@ import SettingsView from '@/components/SettingsView';
 import ActivityLogView from '@/components/ActivityLogView';
 import ReportsView from '@/components/ReportsView';
 import BulkChargeView from '@/components/BulkChargeView';
+import RemindersView from '@/components/RemindersView';
 import CommandPalette from '@/components/CommandPalette';
 import ThemeToggle from '@/components/ThemeToggle';
 
@@ -20,6 +21,7 @@ const TABS = [
   { id: 'bulk-charge', label: 'חיוב גורף', icon: Zap },
   { id: 'debts', label: 'חובות', icon: Banknote },
   { id: 'reports', label: 'דוחות', icon: BarChart3 },
+  { id: 'reminders', label: 'תזכורות', icon: Bell },
   { id: 'activity', label: 'פעולות', icon: History },
   { id: 'settings', label: 'הגדרות', icon: Settings },
 ];
@@ -31,7 +33,7 @@ const Index = () => {
     <div className="min-h-screen bg-background" dir="rtl">
       <CommandPalette onNavigate={setActiveTab} />
       
-      {/* Modern Header */}
+      {/* Header */}
       <header className="border-b border-border/40 bg-card/60 backdrop-blur-xl sticky top-0 z-50">
         <div className="container flex items-center justify-between h-14 px-4">
           <div className="flex items-center gap-3">
@@ -59,7 +61,7 @@ const Index = () => {
       {/* Navigation */}
       <nav className="border-b border-border/30 bg-card/30 backdrop-blur-sm sticky top-14 z-40">
         <div className="container px-4">
-          <div className="flex gap-0.5 overflow-x-auto py-1 -mb-px">
+          <div className="flex gap-0.5 overflow-x-auto py-1 -mb-px scrollbar-none">
             {TABS.map(tab => {
               const isActive = activeTab === tab.id;
               return (
@@ -89,6 +91,7 @@ const Index = () => {
         {activeTab === 'bulk-charge' && <BulkChargeView />}
         {activeTab === 'debts' && <DebtsView />}
         {activeTab === 'reports' && <ReportsView />}
+        {activeTab === 'reminders' && <RemindersView />}
         {activeTab === 'activity' && <ActivityLogView />}
         {activeTab === 'settings' && <SettingsView />}
       </main>

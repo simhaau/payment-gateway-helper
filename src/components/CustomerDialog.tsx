@@ -196,7 +196,7 @@ export default function CustomerDialog({ open, onOpenChange, customer, groups, o
         bankNumber, branchNumber, accountNumber, accountHolderName,
         authorizationRef, authorizationDate, amperes, monthlyAmount,
         billingCycle, startDate, endDate,
-        chargeFrequencyMonths: 1, status, groupId, phaseId: null, tags: [] as string[],
+        chargeFrequencyMonths: 1, status, groupId, phaseId: null, tags: [] as string[], balance: 0,
       };
       if (isEdit && customer) {
         await updateCustomer({ ...customer, ...data, updatedAt: now });
