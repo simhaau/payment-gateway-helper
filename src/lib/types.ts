@@ -144,6 +144,7 @@ export const DEFAULT_SETTINGS: Settings = {
   pricePerAmpere: 0,
   primaryColor: '',
   secondaryColor: '',
+  stickyNav: true,
 };
 
 export const EMPTY_CUSTOMER: Omit<Customer, 'id' | 'createdAt' | 'updatedAt'> = {
