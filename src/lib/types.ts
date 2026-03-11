@@ -97,7 +97,7 @@ export interface BillingBatch {
   valueDate: string;
   totalAmount: number;
   transactionCount: number;
-  status: 'pending' | 'generated' | 'exported' | 'collected';
+  status: 'pending' | 'generated' | 'exported' | 'collected' | 'cancelled';
   transactions: BillingTransaction[];
   createdAt: string;
 }
