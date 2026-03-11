@@ -25,6 +25,7 @@ interface ReportRow {
   totalAmount: number;
   paidAmount: number;
   pendingAmount: number;
+  unpaidAmount: number;
   balance: number;
   status: string;
   paymentMethod: string;
@@ -50,12 +51,15 @@ export default function ReportsView() {
   });
   const [selectedYear, setSelectedYear] = useState(() => String(new Date().getFullYear()));
 
-  useEffect(() => {
+  const loadData = () => {
     Promise.all([getAllCustomers(), getAllGroups(), getAllDebts(), getAllBatches(), getSettings(), getAllPhases()])
       .then(([c, g, d, b, s, p]) => { setCustomers(c); setGroups(g); setDebts(d); setBatches(b); setSettings(s); setPhases(p); });
-  }, []);
+  };
+
+  useEffect(() => { loadData(); }, []);
 
   const pricePerAmpere = settings?.pricePerAmpere || 0;
+  const existingCustomerIds = useMemo(() => new Set(customers.map(c => c.id!)), [customers]);
 
   const filteredCustomersList = useMemo(() => {
     if (!customerSearch) return customers;
@@ -72,19 +76,19 @@ export default function ReportsView() {
 
   const targetCustomerIds = useMemo(() => new Set(targetCustomers.map(c => c.id!)), [targetCustomers]);
 
+  // Filter debts: only for existing customers
   const filteredDebts = useMemo(() => {
-    let filtered = debts.filter(d => targetCustomerIds.has(d.customerId));
+    let filtered = debts.filter(d => targetCustomerIds.has(d.customerId) && existingCustomerIds.has(d.customerId));
     if (period === 'monthly') {
       filtered = filtered.filter(d => d.month === selectedMonth);
     } else {
       filtered = filtered.filter(d => d.month.startsWith(selectedYear));
     }
     return filtered;
-  }, [debts, targetCustomerIds, period, selectedMonth, selectedYear]);
+  }, [debts, targetCustomerIds, existingCustomerIds, period, selectedMonth, selectedYear]);
 
   const reportRows = useMemo((): ReportRow[] => {
     const map = new Map<string, ReportRow>();
-    const customerMap = new Map(customers.map(c => [c.id!, c]));
 
     for (const c of targetCustomers) {
       const customerDebts = filteredDebts.filter(d => d.customerId === c.id!);
@@ -95,16 +99,25 @@ export default function ReportsView() {
         const baseAmt = base.reduce((s, d) => d.status !== 'suspended' ? s + d.amount : s, 0);
         const extraAmt = extras.reduce((s, d) => d.status !== 'suspended' ? s + d.amount : s, 0);
         const paid = customerDebts.filter(d => d.status !== 'suspended').reduce((s, d) => s + d.paidAmount, 0);
-        const pending = customerDebts.filter(d => d.status === 'pending_collection').reduce((s, d) => s + d.amount, 0);
+        const pending = customerDebts.filter(d => d.status === 'pending_collection').reduce((s, d) => s + (d.amount - d.paidAmount), 0);
         const total = baseAmt + extraAmt;
         const expectedBase = getCustomerMonthlyAmount(c, pricePerAmpere);
-        const allPaid = customerDebts.length > 0 && customerDebts.filter(d => d.status !== 'suspended').every(d => d.status === 'paid');
+        const displayTotal = total || expectedBase;
+
+        // Determine status accurately
+        const activeDebts = customerDebts.filter(d => d.status !== 'suspended');
+        const allPaid = activeDebts.length > 0 && activeDebts.every(d => d.status === 'paid');
+        const hasPending = activeDebts.some(d => d.status === 'pending_collection');
+        const hasPartial = paid > 0 && !allPaid;
+        const unpaidAmt = activeDebts.filter(d => d.status === 'unpaid').reduce((s, d) => s + (d.amount - d.paidAmount), 0);
 
         let status = 'לא שולם';
         if (allPaid) status = 'שולם';
-        else if (pending > 0) status = 'ממתין לגביה';
-        else if (paid > 0) status = 'חלקי';
-        else if (customerDebts.some(d => d.status === 'suspended')) status = 'מושהה';
+        else if (hasPending && unpaidAmt === 0) status = 'ממתין לגביה';
+        else if (hasPending && unpaidAmt > 0) status = 'חלקי + ממתין';
+        else if (hasPartial) status = 'חלקי';
+        else if (customerDebts.every(d => d.status === 'suspended')) status = 'מושהה';
+        else if (customerDebts.length === 0 && c.status === 'active') status = 'טרם חויב';
 
         const pm = c.paymentMethod === 'cash' ? 'מזומן' : c.paymentMethod === 'mixed' ? 'משולב' : 'בנק';
 
@@ -114,27 +127,36 @@ export default function ReportsView() {
           month: selectedMonth,
           baseAmount: baseAmt || expectedBase,
           extraAmount: extraAmt,
-          totalAmount: total || expectedBase,
+          totalAmount: displayTotal,
           paidAmount: paid,
           pendingAmount: pending,
-          balance: (total || expectedBase) - paid,
+          unpaidAmount: unpaidAmt,
+          balance: displayTotal - paid,
           status,
           paymentMethod: pm,
         });
       } else {
         const months = new Set(customerDebts.map(d => d.month));
-        let yearBase = 0, yearExtra = 0, yearPaid = 0, yearPending = 0;
+        let yearBase = 0, yearExtra = 0, yearPaid = 0, yearPending = 0, yearUnpaid = 0;
         for (const month of months) {
           const mDebts = customerDebts.filter(d => d.month === month);
-          const base = mDebts.filter(d => !d.notes || (!d.notes.includes('חיוב נוסף') && !d.notes.includes('אמפרים נוספים') && !d.notes.includes('חיוב גורף')));
-          const extras = mDebts.filter(d => d.notes && (d.notes.includes('חיוב נוסף') || d.notes.includes('אמפרים נוספים') || d.notes.includes('חיוב גורף')));
-          yearBase += base.filter(d => d.status !== 'suspended').reduce((s, d) => s + d.amount, 0);
-          yearExtra += extras.filter(d => d.status !== 'suspended').reduce((s, d) => s + d.amount, 0);
+          const baseD = mDebts.filter(d => !d.notes || (!d.notes.includes('חיוב נוסף') && !d.notes.includes('אמפרים נוספים') && !d.notes.includes('חיוב גורף')));
+          const extrasD = mDebts.filter(d => d.notes && (d.notes.includes('חיוב נוסף') || d.notes.includes('אמפרים נוספים') || d.notes.includes('חיוב גורף')));
+          yearBase += baseD.filter(d => d.status !== 'suspended').reduce((s, d) => s + d.amount, 0);
+          yearExtra += extrasD.filter(d => d.status !== 'suspended').reduce((s, d) => s + d.amount, 0);
           yearPaid += mDebts.filter(d => d.status !== 'suspended').reduce((s, d) => s + d.paidAmount, 0);
-          yearPending += mDebts.filter(d => d.status === 'pending_collection').reduce((s, d) => s + d.amount, 0);
+          yearPending += mDebts.filter(d => d.status === 'pending_collection').reduce((s, d) => s + (d.amount - d.paidAmount), 0);
+          yearUnpaid += mDebts.filter(d => d.status === 'unpaid').reduce((s, d) => s + (d.amount - d.paidAmount), 0);
         }
         const total = yearBase + yearExtra;
         const pm = c.paymentMethod === 'cash' ? 'מזומן' : c.paymentMethod === 'mixed' ? 'משולב' : 'בנק';
+        
+        let status = 'לא שולם';
+        if (total > 0 && yearPaid >= total) status = 'שולם';
+        else if (yearPending > 0 && yearUnpaid === 0) status = 'ממתין לגביה';
+        else if (yearPending > 0) status = 'חלקי + ממתין';
+        else if (yearPaid > 0) status = 'חלקי';
+
         map.set(`${c.id}-year`, {
           customerName: c.nickname || c.fullName,
           customerId: c.id!,
@@ -144,8 +166,9 @@ export default function ReportsView() {
           totalAmount: total,
           paidAmount: yearPaid,
           pendingAmount: yearPending,
+          unpaidAmount: yearUnpaid,
           balance: total - yearPaid,
-          status: total > 0 && yearPaid >= total ? 'שולם' : yearPending > 0 ? 'ממתין לגביה' : yearPaid > 0 ? 'חלקי' : 'לא שולם',
+          status,
           paymentMethod: pm,
         });
       }
@@ -159,6 +182,7 @@ export default function ReportsView() {
     total: reportRows.reduce((s, r) => s + r.totalAmount, 0),
     paid: reportRows.reduce((s, r) => s + r.paidAmount, 0),
     pending: reportRows.reduce((s, r) => s + r.pendingAmount, 0),
+    unpaid: reportRows.reduce((s, r) => s + r.unpaidAmount, 0),
     balance: reportRows.reduce((s, r) => s + r.balance, 0),
   }), [reportRows]);
 
@@ -179,13 +203,13 @@ export default function ReportsView() {
       const wsData = [
         [reportTitle],
         [],
-        ['#', 'שם לקוח', 'אופן תשלום', 'חיוב בסיסי', 'חיובים נוספים', 'סה"כ', 'שולם', 'ממתין לגביה', 'יתרה', 'סטטוס'],
-        ...reportRows.map((r, i) => [i + 1, r.customerName, r.paymentMethod, r.baseAmount, r.extraAmount, r.totalAmount, r.paidAmount, r.pendingAmount, r.balance, r.status]),
+        ['#', 'שם לקוח', 'אופן תשלום', 'חיוב בסיסי', 'חיובים נוספים', 'סה"כ', 'שולם', 'ממתין לגביה', 'חוב פתוח', 'יתרה', 'סטטוס'],
+        ...reportRows.map((r, i) => [i + 1, r.customerName, r.paymentMethod, r.baseAmount, r.extraAmount, r.totalAmount, r.paidAmount, r.pendingAmount, r.unpaidAmount, r.balance, r.status]),
         [],
-        ['', 'סה"כ', '', totals.base, totals.extra, totals.total, totals.paid, totals.pending, totals.balance, ''],
+        ['', 'סה"כ', '', totals.base, totals.extra, totals.total, totals.paid, totals.pending, totals.unpaid, totals.balance, ''],
       ];
       const ws = XLSX.utils.aoa_to_sheet(wsData);
-      ws['!cols'] = [{ wch: 5 }, { wch: 22 }, { wch: 10 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 12 }];
+      ws['!cols'] = [{ wch: 5 }, { wch: 22 }, { wch: 10 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 14 }];
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'דוח');
       XLSX.writeFile(wb, `report_${periodLabel}_${scope}.xlsx`);
@@ -200,8 +224,8 @@ export default function ReportsView() {
     try {
       await exportTableToPDF({
         title: reportTitle,
-        subtitle: `${reportRows.length} לקוחות • סה"כ: ₪${totals.total.toLocaleString()} • שולם: ₪${totals.paid.toLocaleString()} • יתרה: ₪${totals.balance.toLocaleString()}`,
-        headers: ['#', 'שם לקוח', 'תשלום', 'בסיסי', 'נוספים', 'סה"כ', 'שולם', 'ממתין', 'יתרה', 'סטטוס'],
+        subtitle: `${reportRows.length} לקוחות • סה"כ: ₪${totals.total.toLocaleString()} • שולם: ₪${totals.paid.toLocaleString()} • ממתין: ₪${totals.pending.toLocaleString()} • חוב: ₪${totals.unpaid.toLocaleString()} • יתרה: ₪${totals.balance.toLocaleString()}`,
+        headers: ['#', 'שם לקוח', 'תשלום', 'בסיסי', 'נוספים', 'סה"כ', 'שולם', 'ממתין', 'חוב', 'יתרה', 'סטטוס'],
         rows: reportRows.map((r, i) => [
           i + 1, r.customerName, r.paymentMethod,
           `₪${r.baseAmount.toLocaleString()}`,
@@ -209,10 +233,11 @@ export default function ReportsView() {
           `₪${r.totalAmount.toLocaleString()}`,
           `₪${r.paidAmount.toLocaleString()}`,
           r.pendingAmount > 0 ? `₪${r.pendingAmount.toLocaleString()}` : '—',
+          r.unpaidAmount > 0 ? `₪${r.unpaidAmount.toLocaleString()}` : '—',
           `₪${r.balance.toLocaleString()}`,
           r.status,
         ]),
-        totalsRow: ['', 'סה"כ', '', `₪${totals.base.toLocaleString()}`, `₪${totals.extra.toLocaleString()}`, `₪${totals.total.toLocaleString()}`, `₪${totals.paid.toLocaleString()}`, `₪${totals.pending.toLocaleString()}`, `₪${totals.balance.toLocaleString()}`, ''],
+        totalsRow: ['', 'סה"כ', '', `₪${totals.base.toLocaleString()}`, `₪${totals.extra.toLocaleString()}`, `₪${totals.total.toLocaleString()}`, `₪${totals.paid.toLocaleString()}`, `₪${totals.pending.toLocaleString()}`, `₪${totals.unpaid.toLocaleString()}`, `₪${totals.balance.toLocaleString()}`, ''],
         filename: `report_${periodLabel}_${scope}.pdf`,
       });
       toast.success('PDF יוצא בהצלחה');
@@ -226,8 +251,10 @@ export default function ReportsView() {
     switch (status) {
       case 'שולם': return <Badge className="bg-success/15 text-success text-xs">שולם</Badge>;
       case 'ממתין לגביה': return <Badge className="bg-warning/15 text-warning text-xs">ממתין</Badge>;
+      case 'חלקי + ממתין': return <Badge className="bg-warning/15 text-warning text-xs">חלקי + ממתין</Badge>;
       case 'חלקי': return <Badge variant="outline" className="text-warning text-xs">חלקי</Badge>;
       case 'מושהה': return <Badge variant="outline" className="text-muted-foreground text-xs">מושהה</Badge>;
+      case 'טרם חויב': return <Badge variant="outline" className="text-muted-foreground text-xs">טרם חויב</Badge>;
       default: return <Badge variant="destructive" className="text-xs">לא שולם</Badge>;
     }
   };
@@ -328,12 +355,16 @@ export default function ReportsView() {
               <FileSpreadsheet className="h-4 w-4" />
               ייצוא Excel
             </Button>
+            <Button variant="outline" onClick={loadData} className="gap-2">
+              <Search className="h-4 w-4" />
+              רענן נתונים
+            </Button>
           </div>
         </CardContent>
       </Card>
 
       {/* Summary */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
         <Card className="glass-card">
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground">לקוחות</p>
@@ -366,6 +397,12 @@ export default function ReportsView() {
         </Card>
         <Card className="glass-card">
           <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground">חוב פתוח</p>
+            <p className="text-xl font-bold text-destructive mt-1">₪{totals.unpaid.toLocaleString()}</p>
+          </CardContent>
+        </Card>
+        <Card className="glass-card">
+          <CardContent className="p-4">
             <p className="text-xs text-muted-foreground">יתרה</p>
             <p className={`text-xl font-bold mt-1 flex items-center gap-1 ${totals.balance > 0 ? 'text-destructive' : 'text-success'}`}>
               <TrendingDown className="h-4 w-4" />₪{totals.balance.toLocaleString()}
@@ -392,6 +429,7 @@ export default function ReportsView() {
                   <TableHead>סה"כ</TableHead>
                   <TableHead>שולם</TableHead>
                   <TableHead>ממתין</TableHead>
+                  <TableHead>חוב</TableHead>
                   <TableHead>יתרה</TableHead>
                   <TableHead>סטטוס</TableHead>
                 </TableRow>
@@ -411,6 +449,9 @@ export default function ReportsView() {
                     <TableCell className={r.pendingAmount > 0 ? 'text-warning font-medium' : 'text-muted-foreground'}>
                       {r.pendingAmount > 0 ? `₪${r.pendingAmount.toLocaleString()}` : '—'}
                     </TableCell>
+                    <TableCell className={r.unpaidAmount > 0 ? 'text-destructive font-medium' : 'text-muted-foreground'}>
+                      {r.unpaidAmount > 0 ? `₪${r.unpaidAmount.toLocaleString()}` : '—'}
+                    </TableCell>
                     <TableCell className={r.balance > 0 ? 'text-destructive font-medium' : 'text-success'}>
                       ₪{r.balance.toLocaleString()}
                     </TableCell>
@@ -419,7 +460,7 @@ export default function ReportsView() {
                 ))}
                 {reportRows.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={11} className="text-center py-12 text-muted-foreground">
                       אין נתונים לתקופה שנבחרה
                     </TableCell>
                   </TableRow>
@@ -434,6 +475,7 @@ export default function ReportsView() {
                     <TableCell>₪{totals.total.toLocaleString()}</TableCell>
                     <TableCell className="text-success">₪{totals.paid.toLocaleString()}</TableCell>
                     <TableCell className="text-warning">₪{totals.pending.toLocaleString()}</TableCell>
+                    <TableCell className="text-destructive">₪{totals.unpaid.toLocaleString()}</TableCell>
                     <TableCell className={totals.balance > 0 ? 'text-destructive' : 'text-success'}>
                       ₪{totals.balance.toLocaleString()}
                     </TableCell>

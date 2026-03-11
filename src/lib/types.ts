@@ -97,7 +97,7 @@ export interface BillingBatch {
   valueDate: string;
   totalAmount: number;
   transactionCount: number;
-  status: 'pending' | 'generated' | 'exported' | 'collected';
+  status: 'pending' | 'generated' | 'exported' | 'collected' | 'cancelled';
   transactions: BillingTransaction[];
   createdAt: string;
 }
@@ -115,6 +115,7 @@ export interface Settings {
   pricePerAmpere: number;
   primaryColor: string;
   secondaryColor: string;
+  stickyNav: boolean;
 }
 
 export interface ActivityLog {
@@ -143,6 +144,7 @@ export const DEFAULT_SETTINGS: Settings = {
   pricePerAmpere: 0,
   primaryColor: '',
   secondaryColor: '',
+  stickyNav: true,
 };
 
 export const EMPTY_CUSTOMER: Omit<Customer, 'id' | 'createdAt' | 'updatedAt'> = {
