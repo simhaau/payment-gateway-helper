@@ -60,7 +60,7 @@ export default function BillingView() {
   const alreadyBilledIds = useMemo(() => {
     const ids = new Set<number>();
     for (const b of batches) {
-      if ((b.status === 'collected' || b.status === 'exported' || b.status === 'pending') && b.status !== 'cancelled') {
+      if (b.status === 'collected' || b.status === 'exported' || b.status === 'pending') {
         const batchMonth = b.date.substring(0, 7);
         if (batchMonth === currentMonth) {
           for (const t of b.transactions) {
