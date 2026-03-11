@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { LayoutDashboard, Users, FolderKanban, CreditCard, Settings, Banknote, History, BarChart3, Zap, Bell } from 'lucide-react';
 import DashboardView from '@/components/DashboardView';
 import CustomersView from '@/components/CustomersView';
@@ -12,6 +12,7 @@ import BulkChargeView from '@/components/BulkChargeView';
 import RemindersView from '@/components/RemindersView';
 import CommandPalette from '@/components/CommandPalette';
 import ThemeToggle from '@/components/ThemeToggle';
+import { getSettings } from '@/lib/db';
 
 const TABS = [
   { id: 'dashboard', label: 'לוח בקרה', icon: LayoutDashboard },
@@ -28,6 +29,11 @@ const TABS = [
 
 const Index = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [stickyNav, setStickyNav] = useState(true);
+
+  useEffect(() => {
+    getSettings().then(s => setStickyNav(s.stickyNav !== false));
+  }, []);
 
   return (
     <div className="min-h-screen bg-background" dir="rtl">
