@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { getSettings, saveSettings, exportAllData, importData, getAllPhases, addPhase, deletePhase, addActivity } from '@/lib/db';
 import type { Settings, Phase } from '@/lib/types';
@@ -142,6 +143,25 @@ export default function SettingsView() {
           </div>
           <SettingsField label="מחיר לאמפר (₪)" field="pricePerAmpere" value={form.pricePerAmpere} onChange={set} dir="ltr" placeholder="10" />
           <p className="text-xs text-muted-foreground">סכום חודשי = כמות אמפרים × מחיר לאמפר</p>
+        </CardContent>
+      </Card>
+
+      {/* UI Preferences */}
+      <Card className="glass-card">
+        <CardHeader>
+          <CardTitle className="text-lg">ממשק משתמש</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <Label>ניווט צף</Label>
+              <p className="text-xs text-muted-foreground">הכפתורים של הניווט יהיו צפים (sticky) בראש הדף</p>
+            </div>
+            <Switch
+              checked={form.stickyNav !== false}
+              onCheckedChange={v => set('stickyNav' as keyof Settings, v ? 1 : 0)}
+            />
+          </div>
         </CardContent>
       </Card>
 

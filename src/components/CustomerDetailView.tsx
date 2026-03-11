@@ -27,7 +27,6 @@ export default function CustomerDetailView({ customer, onBack }: Props) {
   const [batches, setBatches] = useState<BillingBatch[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
 
-  // Add charge dialog
   const [addChargeDialog, setAddChargeDialog] = useState(false);
   const [chargeType, setChargeType] = useState<'money' | 'amperes'>('money');
   const [chargeAmount, setChargeAmount] = useState(0);
@@ -38,12 +37,10 @@ export default function CustomerDetailView({ customer, onBack }: Props) {
   });
   const [chargeNotes, setChargeNotes] = useState('');
 
-  // Edit charge dialog
   const [editDialog, setEditDialog] = useState<DebtRecord | null>(null);
   const [editAmount, setEditAmount] = useState(0);
   const [editNotes, setEditNotes] = useState('');
 
-  // Delete confirmation
   const [deleteTarget, setDeleteTarget] = useState<DebtRecord | null>(null);
 
   const loadData = () => {
@@ -69,20 +66,18 @@ export default function CustomerDetailView({ customer, onBack }: Props) {
   const now = new Date();
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
-  // Current month status
   const currentMonthDebts = useMemo(() => debts.filter(d => d.month === currentMonth), [debts, currentMonth]);
   const activeCurrentDebts = useMemo(() => currentMonthDebts.filter(d => d.status !== 'suspended'), [currentMonthDebts]);
   const currentMonthTotal = activeCurrentDebts.reduce((s, d) => s + d.amount, 0);
   const currentMonthPaid = activeCurrentDebts.reduce((s, d) => s + d.paidAmount, 0);
   const currentMonthBalance = currentMonthTotal - currentMonthPaid;
+  const currentMonthPending = activeCurrentDebts.filter(d => d.status === 'pending_collection').reduce((s, d) => s + (d.amount - d.paidAmount), 0);
 
-  // Breakdown: base vs extras
   const baseDebts = useMemo(() => activeCurrentDebts.filter(d => !d.notes || (!d.notes.includes('אמפרים נוספים') && !d.notes.includes('חיוב נוסף'))), [activeCurrentDebts]);
   const extraDebts = useMemo(() => activeCurrentDebts.filter(d => d.notes && (d.notes.includes('אמפרים נוספים') || d.notes.includes('חיוב נוסף'))), [activeCurrentDebts]);
   const baseTotal = baseDebts.reduce((s, d) => s + d.amount, 0);
   const extrasTotal = extraDebts.reduce((s, d) => s + d.amount, 0);
 
-  // Overall stats (exclude suspended from totals)
   const activeDebts = useMemo(() => debts.filter(d => d.status !== 'suspended'), [debts]);
   const totalEverCharged = useMemo(() => activeDebts.reduce((s, d) => s + d.amount, 0), [activeDebts]);
   const totalEverPaid = useMemo(() => activeDebts.reduce((s, d) => s + d.paidAmount, 0), [activeDebts]);
@@ -90,10 +85,8 @@ export default function CustomerDetailView({ customer, onBack }: Props) {
     activeDebts.filter(d => d.status !== 'paid' && d.status !== 'advance').reduce((s, d) => s + (d.amount - d.paidAmount), 0),
     [activeDebts]
   );
-  const advanceMonths = useMemo(() => debts.filter(d => d.status === 'advance').length, [debts]);
   const suspendedCount = useMemo(() => debts.filter(d => d.status === 'suspended').length, [debts]);
 
-  // Batch history for this customer
   const customerBatches = useMemo(() => {
     return batches
       .filter(b => b.transactions.some(t => t.customerId === customer.id && t.status === 'included'))
@@ -104,10 +97,7 @@ export default function CustomerDetailView({ customer, onBack }: Props) {
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }, [batches, customer.id]);
 
-  // Future months with debts
-  const futureMonthDebts = useMemo(() => {
-    return debts.filter(d => d.month > currentMonth);
-  }, [debts, currentMonth]);
+  const futureMonthDebts = useMemo(() => debts.filter(d => d.month > currentMonth), [debts, currentMonth]);
 
   const futureMonthBreakdown = useMemo(() => {
     const map = new Map<string, { debts: DebtRecord[]; total: number }>();
@@ -120,15 +110,15 @@ export default function CustomerDetailView({ customer, onBack }: Props) {
     return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b)).map(([month, data]) => ({ month, ...data }));
   }, [futureMonthDebts]);
 
-  // Monthly breakdown sorted desc (only past + current)
   const monthlyBreakdown = useMemo(() => {
-    const map = new Map<string, { debts: DebtRecord[]; total: number; paid: number }>();
+    const map = new Map<string, { debts: DebtRecord[]; total: number; paid: number; pending: number }>();
     debts.forEach(d => {
-      const existing = map.get(d.month) || { debts: [], total: 0, paid: 0 };
+      const existing = map.get(d.month) || { debts: [], total: 0, paid: 0, pending: 0 };
       existing.debts.push(d);
       if (d.status !== 'suspended') {
         existing.total += d.amount;
         existing.paid += d.paidAmount;
+        if (d.status === 'pending_collection') existing.pending += (d.amount - d.paidAmount);
       }
       map.set(d.month, existing);
     });
@@ -137,13 +127,11 @@ export default function CustomerDetailView({ customer, onBack }: Props) {
       .map(([month, data]) => ({ month, ...data, balance: data.total - data.paid }));
   }, [debts]);
 
-  // Sorted activities
   const sortedActivities = useMemo(() =>
     [...activities].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 50),
     [activities]
   );
 
-  // --- Handlers ---
   const handleAddCharge = async () => {
     const amount = chargeType === 'amperes' ? chargeAmperes * pricePerAmpere : chargeAmount;
     if (amount <= 0) { toast.error('סכום חייב להיות גדול מ-0'); return; }
@@ -187,7 +175,7 @@ export default function CustomerDetailView({ customer, onBack }: Props) {
       amount: debt.amount,
       createdAt: new Date().toISOString(),
     });
-    toast.success('החיוב הוסתר — לא ייגבה עד שתחזיר אותו');
+    toast.success('החיוב הוסתר');
     loadData();
   };
 
@@ -201,7 +189,7 @@ export default function CustomerDetailView({ customer, onBack }: Props) {
       amount: debt.amount,
       createdAt: new Date().toISOString(),
     });
-    toast.success('החיוב הוחזר — ייגבה בגביה הבאה');
+    toast.success('החיוב הוחזר');
     loadData();
   };
 
@@ -210,7 +198,7 @@ export default function CustomerDetailView({ customer, onBack }: Props) {
     await deleteDebt(deleteTarget.id!);
     await addActivity({
       type: 'debt_deleted',
-      description: `חיוב ₪${deleteTarget.amount.toLocaleString()} נמחק לצמיתות עבור ${displayName} (${deleteTarget.month})`,
+      description: `חיוב ₪${deleteTarget.amount.toLocaleString()} נמחק עבור ${displayName} (${deleteTarget.month})`,
       customerId: customer.id!,
       customerName: customer.fullName,
       amount: deleteTarget.amount,
@@ -238,23 +226,25 @@ export default function CustomerDetailView({ customer, onBack }: Props) {
     setEditDialog(null);
     loadData();
   };
-  // --- Report Export ---
+
   const handleExportCustomerPDF = async () => {
     try {
       const { exportTableToPDF } = await import('@/lib/pdfExport');
       await exportTableToPDF({
         title: `דוח לקוח: ${customer.fullName}${customer.nickname ? ` (${customer.nickname})` : ''}`,
         subtitle: `אמפרים: ${customer.amperes || 0} • סכום חודשי: ₪${monthlyAmount.toLocaleString()} • חוב פתוח: ₪${openDebtTotal.toLocaleString()}`,
-        headers: ['חודש', 'חיובים', 'סה"כ', 'שולם', 'יתרה', 'סטטוס'],
+        headers: ['חודש', 'חיובים', 'סה"כ', 'שולם', 'ממתין', 'יתרה', 'סטטוס'],
         rows: monthlyBreakdown.map(m => [
           m.month,
           m.debts.length.toString(),
           `₪${m.total.toLocaleString()}`,
           `₪${m.paid.toLocaleString()}`,
+          m.pending > 0 ? `₪${m.pending.toLocaleString()}` : '—',
           `₪${m.balance.toLocaleString()}`,
-          m.debts.filter(d => d.status !== 'suspended').every(d => d.status === 'paid') ? 'שולם' : m.balance > 0 ? 'חוב' : 'לא שולם',
+          m.debts.filter(d => d.status !== 'suspended').every(d => d.status === 'paid') ? 'שולם' :
+          m.pending > 0 ? 'ממתין' : m.balance > 0 ? 'חוב' : 'לא שולם',
         ]),
-        totalsRow: ['סה"כ', debts.length.toString(), `₪${totalEverCharged.toLocaleString()}`, `₪${totalEverPaid.toLocaleString()}`, `₪${(totalEverCharged - totalEverPaid).toLocaleString()}`, ''],
+        totalsRow: ['סה"כ', debts.length.toString(), `₪${totalEverCharged.toLocaleString()}`, `₪${totalEverPaid.toLocaleString()}`, '', `₪${(totalEverCharged - totalEverPaid).toLocaleString()}`, ''],
         filename: `customer_${customer.id}_report.pdf`,
       });
       toast.success('PDF יוצא בהצלחה');
@@ -270,16 +260,16 @@ export default function CustomerDetailView({ customer, onBack }: Props) {
       const wsData = [
         [`דוח לקוח: ${customer.fullName}`],
         [],
-        ['חודש', 'מספר חיובים', 'סה"כ', 'שולם', 'יתרה', 'סטטוס'],
+        ['חודש', 'מספר חיובים', 'סה"כ', 'שולם', 'ממתין', 'יתרה', 'סטטוס'],
         ...monthlyBreakdown.map(m => [
-          m.month, m.debts.length, m.total, m.paid, m.balance,
-          m.debts.every(d => d.status === 'paid') ? 'שולם' : m.balance > 0 ? 'חוב' : 'לא שולם',
+          m.month, m.debts.length, m.total, m.paid, m.pending,  m.balance,
+          m.debts.every(d => d.status === 'paid') ? 'שולם' : m.pending > 0 ? 'ממתין' : m.balance > 0 ? 'חוב' : 'לא שולם',
         ]),
         [],
-        ['סה"כ', debts.length, totalEverCharged, totalEverPaid, totalEverCharged - totalEverPaid, ''],
+        ['סה"כ', debts.length, totalEverCharged, totalEverPaid, '', totalEverCharged - totalEverPaid, ''],
       ];
       const ws = XLSX.utils.aoa_to_sheet(wsData);
-      ws['!cols'] = [{ wch: 12 }, { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 10 }];
+      ws['!cols'] = [{ wch: 12 }, { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 10 }];
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'דוח');
       XLSX.writeFile(wb, `customer_${customer.id}_report.xlsx`);
@@ -288,7 +278,6 @@ export default function CustomerDetailView({ customer, onBack }: Props) {
       toast.error('שגיאה בייצוא Excel');
     }
   };
-
 
   const paymentMethodLabel = {
     bank: { label: 'הוראת קבע (בנק)', icon: Building2, color: 'text-primary' },
@@ -308,6 +297,7 @@ export default function CustomerDetailView({ customer, onBack }: Props) {
       case 'partial': return <Badge variant="outline" className="text-warning border-warning/30 text-xs">חלקי</Badge>;
       case 'advance': return <Badge className="bg-primary/15 text-primary border-primary/30 text-xs">מראש</Badge>;
       case 'suspended': return <Badge variant="outline" className="text-muted-foreground border-muted-foreground/30 text-xs">מושהה</Badge>;
+      case 'pending_collection': return <Badge className="bg-warning/15 text-warning border-warning/30 text-xs">ממתין לגביה</Badge>;
       default: return <Badge variant="destructive" className="text-xs">לא שולם</Badge>;
     }
   };
@@ -316,6 +306,7 @@ export default function CustomerDetailView({ customer, onBack }: Props) {
     switch (type) {
       case 'payment': return <Banknote className="h-3.5 w-3.5 text-success" />;
       case 'batch': return <CreditCard className="h-3.5 w-3.5 text-primary" />;
+      case 'batch_collected': return <CheckCircle2 className="h-3.5 w-3.5 text-success" />;
       case 'extra_charge': return <Zap className="h-3.5 w-3.5 text-warning" />;
       case 'advance': return <TrendingUp className="h-3.5 w-3.5 text-primary" />;
       case 'cash_override': return <Banknote className="h-3.5 w-3.5 text-success" />;
@@ -332,15 +323,15 @@ export default function CustomerDetailView({ customer, onBack }: Props) {
           <Button variant="ghost" size="icon" className="h-7 w-7" title="החזר חיוב" onClick={() => handleUnsuspend(d)}>
             <Eye className="h-3.5 w-3.5 text-success" />
           </Button>
-        ) : (
-          <Button variant="ghost" size="icon" className="h-7 w-7" title="הסתר חיוב (לא ייגבה)" onClick={() => handleSuspend(d)}>
+        ) : d.status !== 'pending_collection' ? (
+          <Button variant="ghost" size="icon" className="h-7 w-7" title="הסתר חיוב" onClick={() => handleSuspend(d)}>
             <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
           </Button>
-        )}
+        ) : null}
         <Button variant="ghost" size="icon" className="h-7 w-7" title="ערוך" onClick={() => { setEditDialog(d); setEditAmount(d.amount); setEditNotes(d.notes); }}>
           <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
         </Button>
-        <Button variant="ghost" size="icon" className="h-7 w-7" title="מחק לצמיתות" onClick={() => setDeleteTarget(d)}>
+        <Button variant="ghost" size="icon" className="h-7 w-7" title="מחק" onClick={() => setDeleteTarget(d)}>
           <Trash2 className="h-3.5 w-3.5 text-destructive" />
         </Button>
       </div>
@@ -385,7 +376,7 @@ export default function CustomerDetailView({ customer, onBack }: Props) {
       </div>
 
       {/* Quick Info Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <Card className="glass-card">
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground">אמפרים</p>
@@ -400,26 +391,21 @@ export default function CustomerDetailView({ customer, onBack }: Props) {
         </Card>
         <Card className="glass-card">
           <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">חיוב כולל החודש</p>
+            <p className="text-xs text-muted-foreground">חיוב החודש</p>
             <p className={`text-xl font-bold mt-1 ${currentMonthBalance > 0 ? 'text-destructive' : currentMonthTotal > 0 ? 'text-success' : ''}`}>
               {currentMonthTotal > 0 ? `₪${currentMonthTotal.toLocaleString()}` : `₪${monthlyAmount.toLocaleString()}`}
             </p>
-            {extrasTotal > 0 && (
-              <p className="text-xs text-muted-foreground mt-0.5">
-                בסיס: ₪{baseTotal.toLocaleString()} + נוספים: ₪{extrasTotal.toLocaleString()}
-              </p>
+            {currentMonthPending > 0 && (
+              <p className="text-xs text-warning mt-0.5">ממתין: ₪{currentMonthPending.toLocaleString()}</p>
             )}
             {currentMonthBalance <= 0 && currentMonthPaid > 0 && (
               <p className="text-xs text-success mt-0.5">שולם ✓</p>
-            )}
-            {currentMonthBalance > 0 && (
-              <p className="text-xs text-destructive mt-0.5">יתרה: ₪{currentMonthBalance.toLocaleString()}</p>
             )}
           </CardContent>
         </Card>
         <Card className="glass-card">
           <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">חוב פתוח כולל</p>
+            <p className="text-xs text-muted-foreground">חוב פתוח</p>
             <p className={`text-xl font-bold mt-1 ${openDebtTotal > 0 ? 'text-destructive' : 'text-success'}`}>
               ₪{openDebtTotal.toLocaleString()}
             </p>
@@ -441,7 +427,6 @@ export default function CustomerDetailView({ customer, onBack }: Props) {
 
       {/* Customer Details + Current Month */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Personal & Bank Details */}
         <Card className="glass-card">
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
@@ -452,30 +437,27 @@ export default function CustomerDetailView({ customer, onBack }: Props) {
           <CardContent className="space-y-3 text-sm">
             <div className="grid grid-cols-2 gap-3">
               {customer.idNumber && (
-                <div>
-                  <p className="text-xs text-muted-foreground">ת.ז</p>
-                  <p className="font-mono" dir="ltr">{customer.idNumber}</p>
-                </div>
+                <div><p className="text-xs text-muted-foreground">ת.ז</p><p className="font-mono" dir="ltr">{customer.idNumber}</p></div>
               )}
               {customer.phone && (
-                <div>
-                  <p className="text-xs text-muted-foreground">טלפון</p>
-                  <p className="font-mono" dir="ltr">{customer.phone}</p>
-                </div>
+                <div><p className="text-xs text-muted-foreground">טלפון</p><p className="font-mono" dir="ltr">{customer.phone}</p></div>
+              )}
+              {customer.phone2 && (
+                <div><p className="text-xs text-muted-foreground">טלפון נוסף</p><p className="font-mono" dir="ltr">{customer.phone2}</p></div>
               )}
               {customer.email && (
-                <div>
-                  <p className="text-xs text-muted-foreground">אימייל</p>
-                  <p dir="ltr">{customer.email}</p>
-                </div>
-              )}
-              {customer.address && (
-                <div>
-                  <p className="text-xs text-muted-foreground">כתובת</p>
-                  <p>{customer.address}</p>
-                </div>
+                <div><p className="text-xs text-muted-foreground">אימייל</p><p dir="ltr">{customer.email}</p></div>
               )}
             </div>
+            {(customer.city || customer.street || customer.address) && (
+              <>
+                <Separator />
+                <div>
+                  <p className="text-xs text-muted-foreground">כתובת</p>
+                  <p>{[customer.city, customer.street, customer.houseNumber].filter(Boolean).join(', ') || customer.address}</p>
+                </div>
+              </>
+            )}
             <Separator />
             <div className="flex items-center gap-2">
               <paymentMethodLabel.icon className={`h-4 w-4 ${paymentMethodLabel.color}`} />
@@ -483,31 +465,30 @@ export default function CustomerDetailView({ customer, onBack }: Props) {
             </div>
             {(customer.paymentMethod === 'bank' || customer.paymentMethod === 'mixed') && customer.bankNumber && (
               <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <p className="text-xs text-muted-foreground">בנק</p>
-                  <p className="font-mono" dir="ltr">{customer.bankNumber}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">סניף</p>
-                  <p className="font-mono" dir="ltr">{customer.branchNumber}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">חשבון</p>
-                  <p className="font-mono" dir="ltr">{customer.accountNumber}</p>
-                </div>
+                <div><p className="text-xs text-muted-foreground">בנק</p><p className="font-mono" dir="ltr">{customer.bankNumber}</p></div>
+                <div><p className="text-xs text-muted-foreground">סניף</p><p className="font-mono" dir="ltr">{customer.branchNumber}</p></div>
+                <div><p className="text-xs text-muted-foreground">חשבון</p><p className="font-mono" dir="ltr">{customer.accountNumber}</p></div>
               </div>
+            )}
+            {customer.accountHolderName && (
+              <div><p className="text-xs text-muted-foreground">שם בעל חשבון</p><p>{customer.accountHolderName}</p></div>
             )}
             {customer.paymentMethod === 'mixed' && (
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <p className="text-xs text-muted-foreground">סכום בנק</p>
-                  <p>₪{(customer.bankAmount || 0).toLocaleString()}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">סכום מזומן</p>
-                  <p>₪{(customer.cashAmount || 0).toLocaleString()}</p>
-                </div>
+                <div><p className="text-xs text-muted-foreground">סכום בנק</p><p>₪{(customer.bankAmount || 0).toLocaleString()}</p></div>
+                <div><p className="text-xs text-muted-foreground">סכום מזומן</p><p>₪{(customer.cashAmount || 0).toLocaleString()}</p></div>
               </div>
+            )}
+            {customer.authorizationRef && (
+              <>
+                <Separator />
+                <div className="grid grid-cols-2 gap-3">
+                  <div><p className="text-xs text-muted-foreground">אסמכתא</p><p className="font-mono" dir="ltr">{customer.authorizationRef}</p></div>
+                  {customer.authorizationDate && (
+                    <div><p className="text-xs text-muted-foreground">תאריך אישור</p><p>{new Date(customer.authorizationDate).toLocaleDateString('he-IL')}</p></div>
+                  )}
+                </div>
+              </>
             )}
             <Separator />
             <div className="grid grid-cols-2 gap-3">
@@ -516,25 +497,16 @@ export default function CustomerDetailView({ customer, onBack }: Props) {
                 <p>{customer.startDate ? new Date(customer.startDate).toLocaleDateString('he-IL') : '—'}</p>
               </div>
               {customer.endDate && (
-                <div>
-                  <p className="text-xs text-muted-foreground">תאריך סיום</p>
-                  <p>{new Date(customer.endDate).toLocaleDateString('he-IL')}</p>
-                </div>
+                <div><p className="text-xs text-muted-foreground">תאריך סיום</p><p>{new Date(customer.endDate).toLocaleDateString('he-IL')}</p></div>
               )}
             </div>
             {customer.notes && (
-              <>
-                <Separator />
-                <div>
-                  <p className="text-xs text-muted-foreground">הערות</p>
-                  <p className="text-muted-foreground">{customer.notes}</p>
-                </div>
-              </>
+              <><Separator /><div><p className="text-xs text-muted-foreground">הערות</p><p className="text-muted-foreground">{customer.notes}</p></div></>
             )}
           </CardContent>
         </Card>
 
-        {/* Current Month Status with actions */}
+        {/* Current Month Status */}
         <Card className="glass-card">
           <CardHeader>
             <CardTitle className="text-base flex items-center justify-between">
@@ -543,8 +515,7 @@ export default function CustomerDetailView({ customer, onBack }: Props) {
                 סטטוס חודש נוכחי ({currentMonth})
               </span>
               <Button variant="outline" size="sm" onClick={() => { setChargeMonth(currentMonth); setAddChargeDialog(true); }} className="gap-1 text-xs">
-                <Plus className="h-3 w-3" />
-                הוסף
+                <Plus className="h-3 w-3" />הוסף
               </Button>
             </CardTitle>
           </CardHeader>
@@ -558,11 +529,11 @@ export default function CustomerDetailView({ customer, onBack }: Props) {
             ) : (
               <div className="space-y-3">
                 {currentMonthDebts.map(d => (
-                  <div key={d.id} className={`flex items-center justify-between p-3 rounded-lg border border-border/50 ${d.status === 'suspended' ? 'bg-muted/10 opacity-60' : 'bg-muted/30'}`}>
+                  <div key={d.id} className={`flex items-center justify-between p-3 rounded-lg border border-border/50 ${d.status === 'suspended' ? 'bg-muted/10 opacity-60' : d.status === 'pending_collection' ? 'bg-warning/5 border-warning/20' : d.status === 'paid' ? 'bg-success/5 border-success/20' : 'bg-muted/30'}`}>
                     <div className="flex-1">
                       <p className="text-sm font-medium">
                         ₪{d.amount.toLocaleString()}
-                        {d.notes && <span className="text-xs text-muted-foreground mr-2">({d.notes})</span>}
+                        {d.notes && <span className="text-xs text-muted-foreground mr-2">({d.notes?.split(' | ')[0]})</span>}
                       </p>
                       {d.paidAmount > 0 && d.paidAmount < d.amount && (
                         <p className="text-xs text-muted-foreground">שולם: ₪{d.paidAmount.toLocaleString()} • יתרה: ₪{(d.amount - d.paidAmount).toLocaleString()}</p>
@@ -583,6 +554,12 @@ export default function CustomerDetailView({ customer, onBack }: Props) {
                   <span className="text-muted-foreground">שולם</span>
                   <span className="text-success">₪{currentMonthPaid.toLocaleString()}</span>
                 </div>
+                {currentMonthPending > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-warning">ממתין לגביה</span>
+                    <span className="text-warning">₪{currentMonthPending.toLocaleString()}</span>
+                  </div>
+                )}
                 {currentMonthBalance > 0 && (
                   <div className="flex justify-between text-sm font-semibold">
                     <span className="text-destructive">יתרה לתשלום</span>
@@ -595,7 +572,7 @@ export default function CustomerDetailView({ customer, onBack }: Props) {
         </Card>
       </div>
 
-      {/* Future Month Charges */}
+      {/* Future Charges */}
       {futureMonthBreakdown.length > 0 && (
         <Card className="glass-card border-warning/30">
           <CardHeader>
@@ -631,22 +608,22 @@ export default function CustomerDetailView({ customer, onBack }: Props) {
         </Card>
       )}
 
-      {/* Detailed Monthly Breakdown */}
+      {/* Monthly Breakdown */}
       <Card className="glass-card">
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
             <TrendingDown className="h-4 w-4 text-primary" />
-            היסטוריית חיובים מפורטת ({debts.length} חיובים)
+            היסטוריית חיובים ({debts.length})
           </CardTitle>
         </CardHeader>
         <CardContent>
           {monthlyBreakdown.length === 0 ? (
-            <p className="text-center py-8 text-muted-foreground">אין היסטוריית חיובים</p>
+            <p className="text-center py-8 text-muted-foreground">אין היסטוריה</p>
           ) : (
             <div className="space-y-4">
               {monthlyBreakdown.map(m => {
                 const allPaid = m.debts.filter(d => d.status !== 'suspended').every(d => d.status === 'paid' || d.status === 'advance');
-                const hasSuspended = m.debts.some(d => d.status === 'suspended');
+                const hasPending = m.debts.some(d => d.status === 'pending_collection');
                 return (
                   <div key={m.month} className="rounded-lg border border-border overflow-hidden">
                     <div className="flex items-center justify-between bg-muted/50 px-4 py-2">
@@ -654,13 +631,15 @@ export default function CustomerDetailView({ customer, onBack }: Props) {
                         <span className="font-mono text-sm font-medium" dir="ltr">{m.month}</span>
                         {allPaid && m.total > 0 ? (
                           <Badge className="bg-success/15 text-success border-success/30 text-xs gap-1"><CheckCircle2 className="h-3 w-3" />שולם</Badge>
+                        ) : hasPending ? (
+                          <Badge className="bg-warning/15 text-warning border-warning/30 text-xs">ממתין לגביה</Badge>
                         ) : m.balance > 0 ? (
                           <Badge variant="destructive" className="text-xs">חוב: ₪{m.balance.toLocaleString()}</Badge>
                         ) : null}
-                        {hasSuspended && <Badge variant="outline" className="text-xs text-muted-foreground">יש מושהים</Badge>}
                       </div>
                       <div className="text-sm text-muted-foreground">
                         סה"כ: ₪{m.total.toLocaleString()} | שולם: ₪{m.paid.toLocaleString()}
+                        {m.pending > 0 && <span className="text-warning"> | ממתין: ₪{m.pending.toLocaleString()}</span>}
                       </div>
                     </div>
                     <Table>
@@ -668,8 +647,7 @@ export default function CustomerDetailView({ customer, onBack }: Props) {
                         {m.debts.map(d => (
                           <TableRow key={d.id} className={`hover:bg-muted/30 ${d.status === 'suspended' ? 'opacity-50' : ''}`}>
                             <TableCell className="text-sm max-w-[250px]">
-                              {d.notes || 'חיוב רגיל'}
-                              {d.status === 'suspended' && <span className="text-xs text-muted-foreground mr-1">(מושהה)</span>}
+                              {d.notes?.split(' | ')[0] || 'חיוב רגיל'}
                             </TableCell>
                             <TableCell className="font-medium">₪{d.amount.toLocaleString()}</TableCell>
                             <TableCell className="text-success">₪{d.paidAmount.toLocaleString()}</TableCell>
@@ -687,13 +665,13 @@ export default function CustomerDetailView({ customer, onBack }: Props) {
         </CardContent>
       </Card>
 
-      {/* Bank Batch History */}
+      {/* Batch History */}
       {customerBatches.length > 0 && (
         <Card className="glass-card">
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
               <FileText className="h-4 w-4 text-primary" />
-              היסטוריית אצוות בנקאיות ({customerBatches.length})
+              היסטוריית אצוות ({customerBatches.length})
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -716,8 +694,8 @@ export default function CustomerDetailView({ customer, onBack }: Props) {
                       <TableCell>{new Date(b.valueDate).toLocaleDateString('he-IL')}</TableCell>
                       <TableCell className="text-success font-medium">₪{b.customerAmount.toLocaleString()}</TableCell>
                       <TableCell>
-                        <Badge variant={b.status === 'exported' ? 'default' : 'secondary'}>
-                          {b.status === 'pending' ? 'ממתין' : b.status === 'generated' ? 'נוצר' : 'יוצא'}
+                        <Badge variant={b.status === 'collected' ? 'default' : 'secondary'} className={b.status === 'collected' ? 'bg-success text-success-foreground' : ''}>
+                          {b.status === 'collected' ? '✓ נגבה' : b.status === 'pending' ? 'ממתין' : b.status === 'exported' ? 'יוצא' : 'נוצר'}
                         </Badge>
                       </TableCell>
                     </TableRow>
@@ -739,7 +717,7 @@ export default function CustomerDetailView({ customer, onBack }: Props) {
         </CardHeader>
         <CardContent>
           {sortedActivities.length === 0 ? (
-            <p className="text-center py-8 text-muted-foreground">אין פעולות רשומות</p>
+            <p className="text-center py-8 text-muted-foreground">אין פעולות</p>
           ) : (
             <div className="space-y-2 max-h-96 overflow-y-auto">
               {sortedActivities.map(a => (
@@ -751,9 +729,6 @@ export default function CustomerDetailView({ customer, onBack }: Props) {
                       {new Date(a.createdAt).toLocaleDateString('he-IL')} {new Date(a.createdAt).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}
                     </p>
                   </div>
-                  {a.amount && a.amount > 0 && (
-                    <span className="text-sm font-medium text-success whitespace-nowrap">₪{a.amount.toLocaleString()}</span>
-                  )}
                 </div>
               ))}
             </div>
@@ -763,79 +738,84 @@ export default function CustomerDetailView({ customer, onBack }: Props) {
 
       {/* Add Charge Dialog */}
       <Dialog open={addChargeDialog} onOpenChange={setAddChargeDialog}>
-        <DialogContent className="max-w-md" dir="rtl">
+        <DialogContent onPointerDownOutside={e => e.preventDefault()}>
           <DialogHeader>
-            <DialogTitle>הוסף חיוב ל{displayName}</DialogTitle>
-            <DialogDescription>הוסף חיוב חד-פעמי שייגבה עם הגביה החודשית</DialogDescription>
+            <DialogTitle>הוספת חיוב — {displayName}</DialogTitle>
+            <DialogDescription>הוסף חיוב נוסף ללקוח. החיוב ייכלל באצווה הבאה.</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>סוג חיוב</Label>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label>סוג</Label>
               <Select value={chargeType} onValueChange={(v: 'money' | 'amperes') => setChargeType(v)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="money">סכום כספי (₪)</SelectItem>
+                  <SelectItem value="money">סכום ב-₪</SelectItem>
                   <SelectItem value="amperes">אמפרים נוספים</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             {chargeType === 'money' ? (
-              <div>
+              <div className="space-y-1.5">
                 <Label>סכום (₪)</Label>
-                <Input type="number" min={0} value={chargeAmount || ''} onChange={e => setChargeAmount(Number(e.target.value))} placeholder="0" />
+                <Input type="number" value={chargeAmount || ''} onChange={e => setChargeAmount(Number(e.target.value))} dir="ltr" placeholder="0" />
               </div>
             ) : (
-              <div>
-                <Label>כמות אמפרים</Label>
-                <Input type="number" min={0} value={chargeAmperes || ''} onChange={e => setChargeAmperes(Number(e.target.value))} placeholder="0" />
+              <div className="space-y-1.5">
+                <Label>אמפרים</Label>
+                <Input type="number" value={chargeAmperes || ''} onChange={e => setChargeAmperes(Number(e.target.value))} dir="ltr" placeholder="0" />
                 {chargeAmperes > 0 && pricePerAmpere > 0 && (
-                  <p className="text-xs text-muted-foreground mt-1">סכום: ₪{(chargeAmperes * pricePerAmpere).toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground">= ₪{(chargeAmperes * pricePerAmpere).toLocaleString()}</p>
                 )}
               </div>
             )}
-            <div>
-              <Label>חודש חיוב</Label>
-              <Input type="month" value={chargeMonth} onChange={e => setChargeMonth(e.target.value)} />
+            <div className="space-y-1.5">
+              <Label>חודש</Label>
+              <input type="month" value={chargeMonth} onChange={e => setChargeMonth(e.target.value)}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" dir="ltr" />
             </div>
-            <div>
+            <div className="space-y-1.5">
               <Label>הערות</Label>
-              <Textarea value={chargeNotes} onChange={e => setChargeNotes(e.target.value)} placeholder="תיאור החיוב..." rows={2} />
+              <Textarea value={chargeNotes} onChange={e => setChargeNotes(e.target.value)} rows={2} />
             </div>
-            <Button onClick={handleAddCharge} className="w-full">
-              הוסף חיוב
-            </Button>
+          </div>
+          <div className="flex justify-end gap-3">
+            <Button variant="secondary" onClick={() => setAddChargeDialog(false)}>ביטול</Button>
+            <Button onClick={handleAddCharge}>הוסף חיוב</Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Edit Charge Dialog */}
-      <Dialog open={!!editDialog} onOpenChange={open => !open && setEditDialog(null)}>
-        <DialogContent className="max-w-md" dir="rtl">
+      {/* Edit Dialog */}
+      <Dialog open={!!editDialog} onOpenChange={() => setEditDialog(null)}>
+        <DialogContent onPointerDownOutside={e => e.preventDefault()}>
           <DialogHeader>
             <DialogTitle>עריכת חיוב</DialogTitle>
-            <DialogDescription>עדכן את סכום או הערות החיוב</DialogDescription>
+            <DialogDescription>{editDialog?.month}</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
               <Label>סכום (₪)</Label>
-              <Input type="number" min={0} value={editAmount || ''} onChange={e => setEditAmount(Number(e.target.value))} />
+              <Input type="number" value={editAmount || ''} onChange={e => setEditAmount(Number(e.target.value))} dir="ltr" />
             </div>
-            <div>
+            <div className="space-y-1.5">
               <Label>הערות</Label>
               <Textarea value={editNotes} onChange={e => setEditNotes(e.target.value)} rows={2} />
             </div>
-            <Button onClick={handleEdit} className="w-full">שמור שינויים</Button>
+          </div>
+          <div className="flex justify-end gap-3">
+            <Button variant="secondary" onClick={() => setEditDialog(null)}>ביטול</Button>
+            <Button onClick={handleEdit}>שמור</Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation */}
-      <AlertDialog open={!!deleteTarget} onOpenChange={open => !open && setDeleteTarget(null)}>
-        <AlertDialogContent dir="rtl">
+      {/* Delete */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
+        <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>מחיקת חיוב לצמיתות</AlertDialogTitle>
+            <AlertDialogTitle>מחיקת חיוב</AlertDialogTitle>
             <AlertDialogDescription>
-              האם למחוק את החיוב על סך ₪{deleteTarget?.amount.toLocaleString()} ({deleteTarget?.month})? פעולה זו בלתי הפיכה.
+              האם למחוק: ₪{deleteTarget?.amount.toLocaleString()} ({deleteTarget?.month})?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Bell, Plus, Trash2, Check, Calendar, Repeat, Palette } from 'lucide-react';
+import { Bell, Plus, Trash2, Check, Calendar, Repeat, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -31,7 +31,6 @@ export default function RemindersView() {
   const [deleteTarget, setDeleteTarget] = useState<Reminder | null>(null);
   const [filter, setFilter] = useState<'all' | 'active' | 'completed'>('active');
 
-  // Form
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [dueDate, setDueDate] = useState(new Date().toISOString().split('T')[0]);
@@ -72,7 +71,6 @@ export default function RemindersView() {
     const completed = !r.completed;
     await updateReminder({ ...r, completed, completedAt: completed ? new Date().toISOString() : '' });
 
-    // If recurring and completing, create next occurrence
     if (completed && r.recurring) {
       const nextDate = new Date(r.dueDate);
       nextDate.setMonth(nextDate.getMonth() + 1);
@@ -157,10 +155,9 @@ export default function RemindersView() {
               <CardContent className="py-3 px-4">
                 <div className="flex items-center gap-3">
                   <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: r.color }} />
-                  <Checkbox checked={r.completed} onCheckedChange={() => handleToggle(r)} />
                   <div className="flex-1 min-w-0">
                     <p className={`text-sm font-medium ${r.completed ? 'line-through text-muted-foreground' : ''}`}>{r.title}</p>
-                    <div className="flex items-center gap-2 mt-0.5">
+                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                       {r.description && <span className="text-xs text-muted-foreground truncate max-w-[200px]">{r.description}</span>}
                       <span className={`text-xs ${isOverdue(r) ? 'text-destructive font-medium' : 'text-muted-foreground'}`}>
                         {new Date(r.dueDate).toLocaleDateString('he-IL')}
@@ -174,9 +171,27 @@ export default function RemindersView() {
                       {isToday(r) && <Badge className="bg-primary/15 text-primary text-[10px] px-1.5 py-0">היום</Badge>}
                     </div>
                   </div>
-                  <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => setDeleteTarget(r)}>
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {!r.completed && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 gap-1.5 text-success border-success/30 hover:bg-success/10 hover:text-success"
+                        onClick={() => handleToggle(r)}
+                      >
+                        <CheckCircle2 className="h-4 w-4" />
+                        הושלם
+                      </Button>
+                    )}
+                    {r.completed && (
+                      <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground" onClick={() => handleToggle(r)}>
+                        החזר
+                      </Button>
+                    )}
+                    <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => setDeleteTarget(r)}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
