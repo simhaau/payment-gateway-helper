@@ -159,7 +159,7 @@ export default function SettingsView() {
             </div>
             <Switch
               checked={form.stickyNav !== false}
-              onCheckedChange={v => set('stickyNav' as keyof Settings, v ? 1 : 0)}
+              onCheckedChange={v => setForm(prev => ({ ...prev, stickyNav: v }))}
             />
           </div>
         </CardContent>
