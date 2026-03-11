@@ -115,6 +115,7 @@ export interface Settings {
   pricePerAmpere: number;
   primaryColor: string;
   secondaryColor: string;
+  stickyNav: boolean;
 }
 
 export interface ActivityLog {
