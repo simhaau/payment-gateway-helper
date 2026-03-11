@@ -65,7 +65,7 @@ const Index = () => {
       </header>
 
       {/* Navigation */}
-      <nav className="border-b border-border/30 bg-card/30 backdrop-blur-sm sticky top-14 z-40">
+      <nav className={`border-b border-border/30 bg-card/30 backdrop-blur-sm ${stickyNav ? 'sticky top-14' : ''} z-40`}>
         <div className="container px-4">
           <div className="flex gap-0.5 overflow-x-auto py-1 -mb-px scrollbar-none">
             {TABS.map(tab => {
