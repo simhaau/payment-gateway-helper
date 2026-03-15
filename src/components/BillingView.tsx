@@ -128,9 +128,10 @@ export default function BillingView() {
           await updateDebt({ ...d, status: 'pending_collection' });
         }
         
-        // For monthly charges: find or create debt records, mark as pending_collection
+      // For monthly charges: use the target month from valueDate, not current month
+        const targetDate = new Date(valueDate);
         for (let m = 0; m < billingMonths; m++) {
-          const monthDate = new Date(now.getFullYear(), now.getMonth() + m);
+          const monthDate = new Date(targetDate.getFullYear(), targetDate.getMonth() + m);
           const month = `${monthDate.getFullYear()}-${String(monthDate.getMonth() + 1).padStart(2, '0')}`;
           const existingDebt = debts.find(d => d.customerId === t.customerId && d.month === month && d.status !== 'paid' && d.status !== 'advance' && d.status !== 'suspended' && !d.notes?.includes('חיוב נוסף') && !d.notes?.includes('אמפרים נוספים'));
           
