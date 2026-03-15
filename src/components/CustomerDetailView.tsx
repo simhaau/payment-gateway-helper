@@ -679,11 +679,12 @@ export default function CustomerDetailView({ customer, onBack }: Props) {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/50">
-                    <TableHead>אצווה #</TableHead>
-                    <TableHead>תאריך</TableHead>
-                    <TableHead>תאריך ערך</TableHead>
-                    <TableHead>סכום</TableHead>
-                    <TableHead>סטטוס</TableHead>
+                     <TableHead>אצווה #</TableHead>
+                     <TableHead>תאריך</TableHead>
+                     <TableHead>תאריך ערך</TableHead>
+                     <TableHead>חודש</TableHead>
+                     <TableHead>סכום</TableHead>
+                     <TableHead>סטטוס</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>

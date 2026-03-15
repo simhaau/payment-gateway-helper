@@ -569,7 +569,9 @@ export default function BillingView() {
             <AlertDialogDescription>
               ייווצרו {targetCount} פעולות גבייה עם תאריך ערך {new Date(valueDate).toLocaleDateString('he-IL')}.
               {billingMonths > 1 && <><br />גבייה עבור {billingMonths} חודשים.</>}
+              {billingTargetMonth !== currentMonth && <><br />חודש יעד: <strong>{billingTargetMonth}</strong> (שונה מהחודש הנוכחי).</>}
               {extraDebtsCount > 0 && includeExtraDebts && <><br />כולל {extraDebtsCount} חיובים נוספים.</>}
+              {includeAlreadyBilled && alreadyBilledCount > 0 && <><br /><span className="text-warning">⚠️ כולל {alreadyBilledCount} לקוחות שכבר נגבו לחודש {billingTargetMonth}.</span></>}
               <br /><br />
               <strong>האצווה תהיה בסטטוס "ממתין לגביה" — לחץ "סמן כנגבה" אחרי שהכסף נכנס.</strong>
             </AlertDialogDescription>
