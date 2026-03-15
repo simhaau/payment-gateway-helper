@@ -415,10 +415,16 @@ export default function BillingView() {
             </Button>
           </div>
 
+          {alreadyBilledCount > 0 && !includeAlreadyBilled && (
+            <div className="flex items-center gap-2 mt-3 p-3 rounded-lg bg-warning/10 border border-warning/20 text-sm text-warning">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              <span>{alreadyBilledCount} לקוחות כבר נגבו לחודש {billingTargetMonth}. סמן "גבה גם מלקוחות שכבר נגבו" כדי לכלול אותם.</span>
+            </div>
+          )}
           {includeAlreadyBilled && alreadyBilledCount > 0 && (
             <div className="flex items-center gap-2 mt-3 p-3 rounded-lg bg-warning/10 border border-warning/20 text-sm text-warning">
               <AlertTriangle className="h-4 w-4 shrink-0" />
-              <span>שים לב: {alreadyBilledCount} לקוחות כבר נגבו החודש. הם ייכללו באצווה זו מחדש.</span>
+              <span>שים לב: {alreadyBilledCount} לקוחות כבר נגבו לחודש {billingTargetMonth}. הם ייכללו באצווה זו מחדש.</span>
             </div>
           )}
         </CardContent>
