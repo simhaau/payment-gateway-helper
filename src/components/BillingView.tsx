@@ -98,8 +98,8 @@ export default function BillingView() {
     const targetIds = new Set(targets.map(c => c.id!));
     return debts.filter(d =>
       targetIds.has(d.customerId) &&
-      existingCustomerIds.has(d.customerId) && // customer must exist
-      d.month === currentMonth &&
+      existingCustomerIds.has(d.customerId) &&
+      d.month === billingTargetMonth &&
       d.status !== 'paid' &&
       d.status !== 'advance' &&
       d.status !== 'suspended' &&
