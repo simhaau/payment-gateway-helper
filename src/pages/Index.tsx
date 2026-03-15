@@ -101,6 +101,23 @@ const Index = () => {
         {activeTab === 'activity' && <ActivityLogView />}
         {activeTab === 'settings' && <SettingsView />}
       </main>
+
+      {/* SA Systems Credit */}
+      <footer className="border-t border-border/30 bg-card/40 backdrop-blur-sm py-4 mt-8">
+        <div className="container px-4 flex flex-col sm:flex-row items-center justify-center gap-2 text-center">
+          <p className="text-sm text-muted-foreground">
+            אפליקציה זו נבנתה על ידי <strong className="text-foreground">SA מערכות</strong> • להזמנת אפליקציה מותאמת אישית: <span className="font-mono text-foreground" dir="ltr">053-3150511</span>
+          </p>
+          <a
+            href="https://simha.rf.gd"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-primary/10 hover:bg-primary/20 text-primary text-sm font-medium transition-colors border border-primary/20"
+          >
+            בקרו באתר שלנו ←
+          </a>
+        </div>
+      </footer>
     </div>
   );
 };

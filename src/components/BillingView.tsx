@@ -52,19 +52,25 @@ export default function BillingView() {
   const now = new Date();
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   
+  // Derive the billing target month from valueDate
+  const billingTargetMonth = useMemo(() => {
+    if (!valueDate) return currentMonth;
+    const d = new Date(valueDate);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  }, [valueDate, currentMonth]);
+  
   // Only include existing active customers (not deleted)
   const existingCustomerIds = useMemo(() => new Set(customers.map(c => c.id!)), [customers]);
   const bankCustomers = customers.filter(c => (c.paymentMethod || 'bank') !== 'cash');
 
-  // Check which customers were already billed this month
+  // Check which customers were already billed for the TARGET month (not just current month)
   const alreadyBilledIds = useMemo(() => {
     const ids = new Set<number>();
     for (const b of batches) {
       if (b.status === 'collected' || b.status === 'exported' || b.status === 'pending') {
         const batchMonth = b.date.substring(0, 7);
-        if (batchMonth === currentMonth) {
+        if (batchMonth === billingTargetMonth) {
           for (const t of b.transactions) {
-            // Only count if customer still exists
             if (t.status === 'included' && existingCustomerIds.has(t.customerId)) {
               ids.add(t.customerId);
             }
@@ -73,7 +79,7 @@ export default function BillingView() {
       }
     }
     return ids;
-  }, [batches, currentMonth, existingCustomerIds]);
+  }, [batches, billingTargetMonth, existingCustomerIds]);
 
   const getTargetCustomers = (): Customer[] => {
     // Only active, existing customers
@@ -92,8 +98,8 @@ export default function BillingView() {
     const targetIds = new Set(targets.map(c => c.id!));
     return debts.filter(d =>
       targetIds.has(d.customerId) &&
-      existingCustomerIds.has(d.customerId) && // customer must exist
-      d.month === currentMonth &&
+      existingCustomerIds.has(d.customerId) &&
+      d.month === billingTargetMonth &&
       d.status !== 'paid' &&
       d.status !== 'advance' &&
       d.status !== 'suspended' &&
@@ -122,9 +128,10 @@ export default function BillingView() {
           await updateDebt({ ...d, status: 'pending_collection' });
         }
         
-        // For monthly charges: find or create debt records, mark as pending_collection
+      // For monthly charges: use the target month from valueDate, not current month
+        const targetDate = new Date(valueDate);
         for (let m = 0; m < billingMonths; m++) {
-          const monthDate = new Date(now.getFullYear(), now.getMonth() + m);
+          const monthDate = new Date(targetDate.getFullYear(), targetDate.getMonth() + m);
           const month = `${monthDate.getFullYear()}-${String(monthDate.getMonth() + 1).padStart(2, '0')}`;
           const existingDebt = debts.find(d => d.customerId === t.customerId && d.month === month && d.status !== 'paid' && d.status !== 'advance' && d.status !== 'suspended' && !d.notes?.includes('חיוב נוסף') && !d.notes?.includes('אמפרים נוספים'));
           
@@ -408,10 +415,16 @@ export default function BillingView() {
             </Button>
           </div>
 
+          {alreadyBilledCount > 0 && !includeAlreadyBilled && (
+            <div className="flex items-center gap-2 mt-3 p-3 rounded-lg bg-warning/10 border border-warning/20 text-sm text-warning">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              <span>{alreadyBilledCount} לקוחות כבר נגבו לחודש {billingTargetMonth}. סמן "גבה גם מלקוחות שכבר נגבו" כדי לכלול אותם.</span>
+            </div>
+          )}
           {includeAlreadyBilled && alreadyBilledCount > 0 && (
             <div className="flex items-center gap-2 mt-3 p-3 rounded-lg bg-warning/10 border border-warning/20 text-sm text-warning">
               <AlertTriangle className="h-4 w-4 shrink-0" />
-              <span>שים לב: {alreadyBilledCount} לקוחות כבר נגבו החודש. הם ייכללו באצווה זו מחדש.</span>
+              <span>שים לב: {alreadyBilledCount} לקוחות כבר נגבו לחודש {billingTargetMonth}. הם ייכללו באצווה זו מחדש.</span>
             </div>
           )}
         </CardContent>
@@ -556,7 +569,9 @@ export default function BillingView() {
             <AlertDialogDescription>
               ייווצרו {targetCount} פעולות גבייה עם תאריך ערך {new Date(valueDate).toLocaleDateString('he-IL')}.
               {billingMonths > 1 && <><br />גבייה עבור {billingMonths} חודשים.</>}
+              {billingTargetMonth !== currentMonth && <><br />חודש יעד: <strong>{billingTargetMonth}</strong> (שונה מהחודש הנוכחי).</>}
               {extraDebtsCount > 0 && includeExtraDebts && <><br />כולל {extraDebtsCount} חיובים נוספים.</>}
+              {includeAlreadyBilled && alreadyBilledCount > 0 && <><br /><span className="text-warning">⚠️ כולל {alreadyBilledCount} לקוחות שכבר נגבו לחודש {billingTargetMonth}.</span></>}
               <br /><br />
               <strong>האצווה תהיה בסטטוס "ממתין לגביה" — לחץ "סמן כנגבה" אחרי שהכסף נכנס.</strong>
             </AlertDialogDescription>

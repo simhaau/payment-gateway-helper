@@ -679,19 +679,23 @@ export default function CustomerDetailView({ customer, onBack }: Props) {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/50">
-                    <TableHead>אצווה #</TableHead>
-                    <TableHead>תאריך</TableHead>
-                    <TableHead>תאריך ערך</TableHead>
-                    <TableHead>סכום</TableHead>
-                    <TableHead>סטטוס</TableHead>
+                     <TableHead>אצווה #</TableHead>
+                     <TableHead>תאריך</TableHead>
+                     <TableHead>תאריך ערך</TableHead>
+                     <TableHead>חודש</TableHead>
+                     <TableHead>סכום</TableHead>
+                     <TableHead>סטטוס</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {customerBatches.map(b => (
+              {customerBatches.map(b => {
+                    const batchMonth = b.valueDate.substring(0, 7);
+                    return (
                     <TableRow key={b.id} className="hover:bg-muted/30">
                       <TableCell className="font-medium">#{b.id}</TableCell>
                       <TableCell>{new Date(b.createdAt).toLocaleDateString('he-IL')}</TableCell>
                       <TableCell>{new Date(b.valueDate).toLocaleDateString('he-IL')}</TableCell>
+                      <TableCell className="font-mono text-xs" dir="ltr">{batchMonth}</TableCell>
                       <TableCell className="text-success font-medium">₪{b.customerAmount.toLocaleString()}</TableCell>
                       <TableCell>
                         <Badge variant={b.status === 'collected' ? 'default' : 'secondary'} className={b.status === 'collected' ? 'bg-success text-success-foreground' : ''}>
@@ -699,7 +703,8 @@ export default function CustomerDetailView({ customer, onBack }: Props) {
                         </Badge>
                       </TableCell>
                     </TableRow>
-                  ))}
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
