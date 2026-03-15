@@ -52,19 +52,25 @@ export default function BillingView() {
   const now = new Date();
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   
+  // Derive the billing target month from valueDate
+  const billingTargetMonth = useMemo(() => {
+    if (!valueDate) return currentMonth;
+    const d = new Date(valueDate);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  }, [valueDate, currentMonth]);
+  
   // Only include existing active customers (not deleted)
   const existingCustomerIds = useMemo(() => new Set(customers.map(c => c.id!)), [customers]);
   const bankCustomers = customers.filter(c => (c.paymentMethod || 'bank') !== 'cash');
 
-  // Check which customers were already billed this month
+  // Check which customers were already billed for the TARGET month (not just current month)
   const alreadyBilledIds = useMemo(() => {
     const ids = new Set<number>();
     for (const b of batches) {
       if (b.status === 'collected' || b.status === 'exported' || b.status === 'pending') {
         const batchMonth = b.date.substring(0, 7);
-        if (batchMonth === currentMonth) {
+        if (batchMonth === billingTargetMonth) {
           for (const t of b.transactions) {
-            // Only count if customer still exists
             if (t.status === 'included' && existingCustomerIds.has(t.customerId)) {
               ids.add(t.customerId);
             }
@@ -73,7 +79,7 @@ export default function BillingView() {
       }
     }
     return ids;
-  }, [batches, currentMonth, existingCustomerIds]);
+  }, [batches, billingTargetMonth, existingCustomerIds]);
 
   const getTargetCustomers = (): Customer[] => {
     // Only active, existing customers
