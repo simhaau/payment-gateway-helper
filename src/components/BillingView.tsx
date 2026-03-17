@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { CreditCard, Download, FileText, AlertCircle, CheckCircle2, Loader2, Search, AlertTriangle, XCircle } from 'lucide-react';
+import { CreditCard, Download, FileText, AlertCircle, CheckCircle2, Loader2, Search, AlertTriangle, XCircle, ShieldCheck, ShieldAlert, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -9,10 +9,12 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { getAllCustomers, getAllGroups, getAllBatches, getAllDebts, addBatch, updateBatch, updateDebt, getSettings, addActivity, deleteBatch, deleteDebt } from '@/lib/db';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import { getAllCustomers, getAllGroups, getAllBatches, getAllDebts, addBatch, updateBatch, updateDebt, getSettings, addActivity, deleteBatch } from '@/lib/db';
 import { getCustomersDueForBilling, createBillingBatch, getCustomerMonthlyAmount } from '@/lib/billing';
-import { generateMasavFile, validateBatchForMasav, downloadMasavFile } from '@/lib/masav';
+import { generateMasavFile, simulateMasavBatch, downloadMasavFile } from '@/lib/masav';
 import type { Customer, Group, BillingBatch, DebtRecord, Settings } from '@/lib/types';
+import type { SimulationResult } from '@/lib/masav';
 import { toast } from 'sonner';
 
 export default function BillingView() {
@@ -35,6 +37,8 @@ export default function BillingView() {
   const [confirmCreate, setConfirmCreate] = useState(false);
   const [collectBatch, setCollectBatch] = useState<BillingBatch | null>(null);
   const [cancelBatch, setCancelBatch] = useState<BillingBatch | null>(null);
+  const [simResult, setSimResult] = useState<SimulationResult | null>(null);
+  const [simBatch, setSimBatch] = useState<BillingBatch | null>(null);
 
   const loadData = () => {
     Promise.all([getAllCustomers(), getAllGroups(), getAllBatches(), getSettings(), getAllDebts()])
@@ -51,19 +55,16 @@ export default function BillingView() {
 
   const now = new Date();
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  
-  // Derive the billing target month from valueDate
+
   const billingTargetMonth = useMemo(() => {
     if (!valueDate) return currentMonth;
     const d = new Date(valueDate);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   }, [valueDate, currentMonth]);
-  
-  // Only include existing active customers (not deleted)
+
   const existingCustomerIds = useMemo(() => new Set(customers.map(c => c.id!)), [customers]);
   const bankCustomers = customers.filter(c => (c.paymentMethod || 'bank') !== 'cash');
 
-  // Check which customers were already billed for the TARGET month (not just current month)
   const alreadyBilledIds = useMemo(() => {
     const ids = new Set<number>();
     for (const b of batches) {
@@ -82,7 +83,6 @@ export default function BillingView() {
   }, [batches, billingTargetMonth, existingCustomerIds]);
 
   const getTargetCustomers = (): Customer[] => {
-    // Only active, existing customers
     let due = getCustomersDueForBilling(bankCustomers);
     if (scope === 'group' && groupId) due = due.filter(c => String(c.groupId) === groupId);
     if (scope === 'single' && singleCustomerId) due = due.filter(c => String(c.id) === singleCustomerId);
@@ -120,25 +120,21 @@ export default function BillingView() {
       batch.status = 'pending';
       const batchId = await addBatch(batch);
 
-      // Create/update debts for each customer in batch
       for (const t of batch.transactions.filter(tx => tx.status === 'included')) {
-        // Mark extra debts as pending
         const custExtras = extras.filter(d => d.customerId === t.customerId && d.status !== 'paid');
         for (const d of custExtras) {
           await updateDebt({ ...d, status: 'pending_collection' });
         }
-        
-      // For monthly charges: use the target month from valueDate, not current month
+
         const targetDate = new Date(valueDate);
         for (let m = 0; m < billingMonths; m++) {
           const monthDate = new Date(targetDate.getFullYear(), targetDate.getMonth() + m);
           const month = `${monthDate.getFullYear()}-${String(monthDate.getMonth() + 1).padStart(2, '0')}`;
           const existingDebt = debts.find(d => d.customerId === t.customerId && d.month === month && d.status !== 'paid' && d.status !== 'advance' && d.status !== 'suspended' && !d.notes?.includes('חיוב נוסף') && !d.notes?.includes('אמפרים נוספים'));
-          
+
           if (existingDebt) {
             await updateDebt({ ...existingDebt, status: 'pending_collection' });
           } else {
-            // Create a new debt record for this month
             const customer = targets.find(c => c.id === t.customerId);
             if (customer) {
               const monthlyAmt = getCustomerMonthlyAmount(customer, pricePerAmpere);
@@ -170,7 +166,7 @@ export default function BillingView() {
         });
       }
 
-      toast.success(`אצוות נוצרה: ${batch.transactionCount} פעולות, ₪${batch.totalAmount.toLocaleString()} — ממתינה לאישור גביה`);
+      toast.success(`אצוות נוצרה: ${batch.transactionCount} פעולות, ₪${batch.totalAmount.toLocaleString()}`);
       loadData();
     } catch (e) {
       console.error('Batch creation error:', e);
@@ -183,12 +179,8 @@ export default function BillingView() {
 
   const handleMarkCollected = async (batch: BillingBatch) => {
     await updateBatch({ ...batch, status: 'collected' });
-
-    // Reload debts to get latest state
     const latestDebts = await getAllDebts();
-
     for (const t of batch.transactions.filter(tx => tx.status === 'included')) {
-      // Find all pending_collection or unpaid debts for this customer
       const customerDebts = latestDebts.filter(d =>
         d.customerId === t.customerId &&
         (d.status === 'pending_collection' || d.status === 'unpaid' || d.status === 'partial') &&
@@ -205,7 +197,6 @@ export default function BillingView() {
         });
       }
     }
-
     await addActivity({
       type: 'batch_collected',
       description: `אצווה #${batch.id} סומנה כנגבתה — ₪${batch.totalAmount.toLocaleString()} (${batch.transactionCount} פעולות)`,
@@ -214,14 +205,12 @@ export default function BillingView() {
       reverseData: JSON.stringify({ batchId: batch.id }),
       createdAt: new Date().toISOString(),
     });
-
     toast.success(`אצווה #${batch.id} סומנה כנגבתה בהצלחה`);
     setCollectBatch(null);
     loadData();
   };
 
   const handleCancelBatch = async (batch: BillingBatch) => {
-    // Revert all debts back to unpaid
     const latestDebts = await getAllDebts();
     for (const t of batch.transactions.filter(tx => tx.status === 'included')) {
       const customerDebts = latestDebts.filter(d =>
@@ -238,34 +227,47 @@ export default function BillingView() {
         });
       }
     }
-
     await deleteBatch(batch.id!);
-
     await addActivity({
       type: 'batch_cancelled',
       description: `אצווה #${batch.id} בוטלה — ₪${batch.totalAmount.toLocaleString()} (${batch.transactionCount} פעולות) — חובות שוחזרו`,
       amount: batch.totalAmount,
       createdAt: new Date().toISOString(),
     });
-
     toast.success(`אצווה #${batch.id} בוטלה — כל החובות שוחזרו`);
     setCancelBatch(null);
     loadData();
   };
 
+  const handleSimulateMasav = (batch: BillingBatch) => {
+    if (!settings) { toast.error('חסרות הגדרות מוסד'); return; }
+    const result = simulateMasavBatch(batch, settings);
+    setSimResult(result);
+    setSimBatch(batch);
+  };
+
   const handleExportMasav = (batch: BillingBatch) => {
     if (!settings) { toast.error('חסרות הגדרות מוסד'); return; }
-    const errors = validateBatchForMasav(batch, settings);
-    if (errors.length > 0) {
-      toast.error(`נמצאו ${errors.length} שגיאות: ${errors[0].message}`);
+
+    // Always run simulation first
+    const result = simulateMasavBatch(batch, settings);
+    if (!result.passed) {
+      setSimResult(result);
+      setSimBatch(batch);
+      toast.error(`נמצאו ${result.criticalCount} שגיאות קריטיות — לא ניתן לייצא קובץ`);
       return;
     }
-    const content = generateMasavFile(batch, settings);
-    const filename = `masav_${batch.date}_${batch.id}.msv`;
-    downloadMasavFile(content, filename);
-    updateBatch({ ...batch, status: 'exported' });
-    toast.success('קובץ מסב יוצא בהצלחה');
-    loadData();
+
+    try {
+      const content = generateMasavFile(batch, settings);
+      const filename = `masav_${batch.date}_${batch.id}.msv`;
+      downloadMasavFile(content, filename);
+      updateBatch({ ...batch, status: 'exported' });
+      toast.success('✓ קובץ מסב עבר את כל הבדיקות הבנקאיות ויוצא בהצלחה');
+      loadData();
+    } catch (e: any) {
+      toast.error(e.message || 'שגיאה ביצירת קובץ מסב');
+    }
   };
 
   // Summary stats
@@ -421,12 +423,6 @@ export default function BillingView() {
               <span>{alreadyBilledCount} לקוחות כבר נגבו לחודש {billingTargetMonth}. סמן "גבה גם מלקוחות שכבר נגבו" כדי לכלול אותם.</span>
             </div>
           )}
-          {includeAlreadyBilled && alreadyBilledCount > 0 && (
-            <div className="flex items-center gap-2 mt-3 p-3 rounded-lg bg-warning/10 border border-warning/20 text-sm text-warning">
-              <AlertTriangle className="h-4 w-4 shrink-0" />
-              <span>שים לב: {alreadyBilledCount} לקוחות כבר נגבו לחודש {billingTargetMonth}. הם ייכללו באצווה זו מחדש.</span>
-            </div>
-          )}
         </CardContent>
       </Card>
 
@@ -445,10 +441,9 @@ export default function BillingView() {
             {batches.map(b => {
               const errorCount = b.transactions.filter(t => t.status === 'error').length;
               const isCollected = b.status === 'collected';
-              // Filter out transactions for deleted customers
               const validTxCount = b.transactions.filter(t => t.status === 'included' && existingCustomerIds.has(t.customerId)).length;
               const deletedTxCount = b.transactions.filter(t => t.status === 'included' && !existingCustomerIds.has(t.customerId)).length;
-              
+
               return (
                 <Card key={b.id} className={`glass-card transition-all ${isCollected ? 'border-success/30' : ''}`}>
                   <CardContent className="py-4">
@@ -483,6 +478,9 @@ export default function BillingView() {
                               <CheckCircle2 className="h-3.5 w-3.5" />סמן כנגבה
                             </Button>
                           )}
+                          <Button size="sm" variant="outline" onClick={() => handleSimulateMasav(b)} className="gap-1">
+                            <Shield className="h-3.5 w-3.5" />סימולציה
+                          </Button>
                           <Button size="sm" variant="outline" onClick={() => handleExportMasav(b)} className="gap-1">
                             <Download className="h-3.5 w-3.5" />מסב
                           </Button>
@@ -499,6 +497,87 @@ export default function BillingView() {
           </div>
         )}
       </div>
+
+      {/* Bank Simulation Results Dialog */}
+      {simResult && (
+        <AlertDialog open={!!simResult} onOpenChange={() => { setSimResult(null); setSimBatch(null); }}>
+          <AlertDialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                {simResult.passed ? (
+                  <><ShieldCheck className="h-5 w-5 text-success" />בדיקה בנקאית — עברה בהצלחה</>
+                ) : (
+                  <><ShieldAlert className="h-5 w-5 text-destructive" />בדיקה בנקאית — נמצאו שגיאות</>
+                )}
+              </AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-3">
+                  {/* Summary */}
+                  <div className="grid grid-cols-2 gap-3 mt-2">
+                    <div className="p-3 rounded-lg bg-muted/50 text-center">
+                      <p className="text-xs text-muted-foreground">רשומות</p>
+                      <p className="text-lg font-bold text-foreground">{simResult.recordCount}</p>
+                    </div>
+                    <div className="p-3 rounded-lg bg-muted/50 text-center">
+                      <p className="text-xs text-muted-foreground">סכום כולל</p>
+                      <p className="text-lg font-bold text-foreground">₪{(simResult.totalAmountAgorot / 100).toLocaleString()}</p>
+                    </div>
+                  </div>
+
+                  {/* Reconciliation */}
+                  <div className={`p-3 rounded-lg border ${simResult.reconciliationValid ? 'bg-success/10 border-success/20' : 'bg-destructive/10 border-destructive/20'}`}>
+                    <div className="flex items-center gap-2 text-sm">
+                      {simResult.reconciliationValid
+                        ? <><CheckCircle2 className="h-4 w-4 text-success" /><span className="text-success font-medium">התאמת סכומים תקינה</span></>
+                        : <><XCircle className="h-4 w-4 text-destructive" /><span className="text-destructive font-medium">אי התאמת סכומים!</span></>
+                      }
+                    </div>
+                  </div>
+
+                  {/* Status badges */}
+                  <div className="flex gap-2">
+                    {simResult.criticalCount > 0 && (
+                      <Badge variant="destructive" className="gap-1"><AlertCircle className="h-3 w-3" />{simResult.criticalCount} שגיאות קריטיות</Badge>
+                    )}
+                    {simResult.warningCount > 0 && (
+                      <Badge variant="outline" className="text-warning gap-1"><AlertTriangle className="h-3 w-3" />{simResult.warningCount} אזהרות</Badge>
+                    )}
+                    {simResult.passed && simResult.warningCount === 0 && (
+                      <Badge className="bg-success text-success-foreground gap-1"><ShieldCheck className="h-3 w-3" />תקין 100%</Badge>
+                    )}
+                  </div>
+
+                  {/* Error list */}
+                  {simResult.errors.length > 0 && (
+                    <div className="space-y-1.5 max-h-60 overflow-y-auto">
+                      {simResult.errors.map((e, i) => (
+                        <div key={i} className={`p-2 rounded text-xs flex items-start gap-2 ${
+                          e.severity === 'critical' ? 'bg-destructive/10 text-destructive' : 'bg-warning/10 text-warning'
+                        }`}>
+                          {e.severity === 'critical' ? <XCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" /> : <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />}
+                          <div>
+                            <span className="font-medium">{e.customerName}</span>
+                            <span className="mx-1">•</span>
+                            <span>{e.message}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>סגור</AlertDialogCancel>
+              {simResult.passed && simBatch && (
+                <AlertDialogAction onClick={() => { handleExportMasav(simBatch!); setSimResult(null); setSimBatch(null); }} className="gap-1 bg-success hover:bg-success/90 text-success-foreground">
+                  <Download className="h-4 w-4" />ייצא קובץ מסב
+                </AlertDialogAction>
+              )}
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
 
       {/* Batch Detail Dialog */}
       {viewBatch && (
